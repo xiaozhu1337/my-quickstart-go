@@ -154,8 +154,9 @@ func (a *App) pickFiles(directory bool) {
 		return
 	}
 	groupID := a.state.ActiveGroupID
+	title := a.text("选择应用或文件", "Choose applications or files")
 	go func() {
-		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.window, Title: a.text("选择应用或文件", "Choose applications or files"), Multiple: true, Directory: directory})
+		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.window, Title: title, Multiple: true, Directory: directory})
 		a.window.Update(func() {
 			if err != nil {
 				a.report(err)

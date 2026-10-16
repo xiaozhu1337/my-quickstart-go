@@ -94,7 +94,7 @@ func (s *State) Normalize() {
 	v.CardFontSize = clamp(v.CardFontSize, 9, 18, 11)
 	v.CardIconScale = clamp(v.CardIconScale, 16, math.Round(min(v.CardWidth, v.CardHeight)*0.82), 56)
 	if strings.TrimSpace(v.FontFamily) == "" {
-		v.FontFamily = "Segoe UI"
+		v.FontFamily = "system"
 	}
 	if len(s.Groups) == 0 {
 		g := Default().Groups[0]

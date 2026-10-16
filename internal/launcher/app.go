@@ -2,6 +2,7 @@ package launcher
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -52,6 +53,7 @@ type App struct {
 	message          string
 	pending          []func()
 	busy             bool
+	quitting         bool
 	fonts            []string
 }
 
@@ -80,7 +82,7 @@ func (a *App) Ready() {
 		}
 	}
 	a.window = mygo.NewWindow(opts)
-	a.window.OnClose(func(e *mygo.CloseEvent) { e.PreventDefault(); a.hide() })
+	a.window.OnClose(a.onClose)
 	a.window.OnResize(a.captureBounds)
 	a.window.OnMove(a.captureBounds)
 	mygo.App.SetLanguages(a.state.Settings.Language)
@@ -135,7 +137,13 @@ func (a *App) Toggle() {
 		a.Show()
 	}
 }
+func (a *App) canHide() bool { return a.tray != nil || a.registeredHotkey != "" }
+
 func (a *App) hide() {
+	if !a.canHide() {
+		a.report(errors.New(a.text("没有可用的托盘或全局快捷键，窗口将保持显示。", "No tray or global hotkey is available; the window will stay visible.")))
+		return
+	}
 	a.captureBounds()
 	if a.window != nil {
 		a.window.Hide()
@@ -156,6 +164,22 @@ func (a *App) captureBounds() {
 	}
 	a.state.Settings.WindowBounds = &b
 	a.changed()
+}
+
+func (a *App) onClose(e *mygo.CloseEvent) {
+	if !a.quitting {
+		e.PreventDefault()
+		a.hide()
+	}
+}
+
+func (a *App) BeforeQuit(e *mygo.QuitEvent) {
+	a.captureBounds()
+	if a.Flush() != nil {
+		e.PreventDefault()
+		return
+	}
+	a.quitting = true
 }
 
 func (a *App) Flush() error {

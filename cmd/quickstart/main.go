@@ -19,12 +19,12 @@ func main() {
 	flag.Parse()
 	exe, err := os.Executable()
 	if err != nil {
-		log.Print(err)
+		startupError(err)
 		return
 	}
 	logs, err := logging.Open(filepath.Dir(exe))
 	if err != nil {
-		log.Print(err)
+		startupError(err)
 		return
 	}
 	defer logs.Close()
@@ -61,12 +61,7 @@ func main() {
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.OnSecondInstance(func([]string, string) { app.Show() })
 	mygo.App.WhenReady(app.Ready)
-	mygo.App.OnWillQuit(func(e *mygo.QuitEvent) {
-		if err := app.Flush(); err != nil {
-			log.Print(err)
-			e.PreventDefault()
-		}
-	})
+	mygo.App.OnBeforeQuit(app.BeforeQuit)
 	if err := mygo.App.Run(); err != nil {
 		log.Print(err)
 	}
@@ -75,7 +70,7 @@ func main() {
 func startupError(err error) {
 	log.Print(err)
 	mygo.App.WhenReady(func() {
-		_, dialogErr := mygo.Dialog.Message(mygo.MessageOptions{Type: mygo.MessageError, Title: "My Quickstart Go", Message: "Unable to open launcher data", Detail: err.Error()})
+		_, dialogErr := mygo.Dialog.Message(mygo.MessageOptions{Type: mygo.MessageError, Title: "My Quickstart Go", Message: "Unable to start launcher", Detail: err.Error()})
 		if dialogErr != nil {
 			log.Print(dialogErr)
 		}

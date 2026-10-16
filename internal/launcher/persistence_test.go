@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/egoist/mygo"
 	"my-quickstart-go/internal/model"
 )
 
@@ -21,6 +22,52 @@ func (m *memoryStore) Save(s model.State) error {
 	m.state = s
 	m.writes++
 	return nil
+}
+
+func TestCloseHidesAndQuitFlushesBeforeClosing(t *testing.T) {
+	p := &memoryStore{fail: true}
+	a := New(model.Default(), nil)
+	a.saver = &saver{store: p, wake: make(chan struct{}, 1)}
+	a.saver.set(a.state)
+	closeEvent := &mygo.CloseEvent{}
+	a.onClose(closeEvent)
+	if !closeEvent.DefaultPrevented() {
+		t.Fatal("ordinary close must hide")
+	}
+	quitEvent := &mygo.QuitEvent{}
+	a.BeforeQuit(quitEvent)
+	if !quitEvent.DefaultPrevented() || a.quitting {
+		t.Fatal("save failure must cancel quit before windows close")
+	}
+	p.fail = false
+	quitEvent = &mygo.QuitEvent{}
+	a.BeforeQuit(quitEvent)
+	if quitEvent.DefaultPrevented() || !a.quitting || p.writes != 1 {
+		t.Fatal("quit must flush pending state")
+	}
+	closeEvent = &mygo.CloseEvent{}
+	a.onClose(closeEvent)
+	if closeEvent.DefaultPrevented() {
+		t.Fatal("explicit quit must allow the window to close")
+	}
+}
+func TestHideNeedsRecallEntry(t *testing.T) {
+	for _, tray := range []bool{false, true} {
+		for _, hotkey := range []string{"", "Ctrl+Space"} {
+			a := New(model.Default(), nil)
+			if tray {
+				a.tray = &mygo.Tray{}
+			}
+			a.registeredHotkey = hotkey
+			if a.canHide() != (tray || hotkey != "") {
+				t.Fatal("hiding requires a tray or registered hotkey")
+			}
+			a.hide()
+			if !a.canHide() && a.message == "" {
+				t.Fatal("unavailable hiding must explain how the window remains reachable")
+			}
+		}
+	}
 }
 
 func TestSaverSnapshotsAndRetries(t *testing.T) {

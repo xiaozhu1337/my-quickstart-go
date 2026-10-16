@@ -1,5 +1,61 @@
 # My Quickstart Go
 
-使用 MyGo 原生 Go 组件迁移的 Windows 快速启动器。
+使用 [MyGo](https://github.com/egoist/mygo) 原生 Go 组件重构的桌面快速启动器，支持 Windows、macOS 和 Linux。界面采用搜索栏、分类侧栏、卡片网格和原生弹层；不依赖 Tauri、浏览器或 WebView。
 
-迁移进行中，功能及验证记录将随实现更新。
+![Windows 原生界面](docs/windows-preview.png)
+
+支持分类增删改、跨分类名称搜索、应用/文件/目录启动、命令、参数和逐项环境变量、系统应用选择、文件拖入、卡片排序和跨分类移动。保留中英文、深浅主题、字体、卡片与侧栏尺寸、窗口置顶、启动时隐藏、相对路径、窗口位置记忆、全局快捷键和托盘。完整对照及平台差异见 [功能与验证记录](docs/FEATURES.md)。
+
+## 直接运行
+
+当前工作区已生成以下构建（构建产物位于被 Git 忽略的 `bin` 目录）：
+
+| 平台 | x64 / Intel | ARM64 / Apple Silicon |
+| --- | --- | --- |
+| Windows | `bin/windows-amd64/my-quickstart-go.exe` | `bin/windows-arm64/my-quickstart-go.exe` |
+| macOS | `bin/darwin-amd64/My Quickstart Go.app` | `bin/darwin-arm64/My Quickstart Go.app` |
+| Linux | `bin/linux-amd64/my-quickstart-go` | `bin/linux-arm64/my-quickstart-go` |
+
+Windows 双击 exe；macOS 通过 Finder 打开 `.app`；Linux 在桌面会话中运行二进制。Linux 需要 GTK 3，托盘需要 `libayatana-appindicator3`；Wayland 全局热键取决于桌面的 GlobalShortcuts portal。macOS 构建尚未签名或公证，需要按本机的应用安全设置放行。
+
+普通关闭会隐藏到托盘；从托盘菜单选择“退出”才结束进程，并在退出前同步保存。没有可用托盘和全局热键时，窗口保持显示，避免失去召回入口。全局热键初始为空，可在设置中输入 `Ctrl+Alt+Space` 并应用。Ctrl/Cmd+F 聚焦主搜索，搜索框中 Esc 清空查询。
+
+用户原先通过 Windows 启动目录快捷方式实现的开机启动，可将该快捷方式目标改为新版 exe；“启动时隐藏窗口”继续生效。
+
+## 数据与旧版迁移
+
+| 平台 | 新版默认数据库 |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%/my-quickstart-go/launcher.db` |
+| macOS | `~/Library/Application Support/my-quickstart-go/launcher.db` |
+| Linux | `$XDG_CONFIG_HOME/my-quickstart-go/launcher.db`，未设时为 `~/.config/my-quickstart-go/launcher.db` |
+
+首次启动且新版默认数据库不存在时，自动查找旧版 `my-quickstart/launcher.db` 及历史 `com.cat.tauri-app/launcher.db`。Windows 查 LocalAppData / AppData，macOS 查 Application Support，Linux 查 XDG_DATA_HOME / `~/.local/share`。读取旧库使用 SQLite 只读一致性事务，完整校验后才创建新版库；不覆盖已有新版数据库，导入失败会明确提示。迁移不写旧 DB/WAL 内容，SQLite 必要的锁及 SHM 元数据可能变化。
+
+旧库中的分类、顺序、条目 ID、参数、环境变量、图标及设置会迁移。相对路径继续相对于**新版程序所在目录**；若原来依靠相对路径，请将新版放到合适目录，或在条目编辑器中调整路径。跨系统迁移不会把 Windows 路径、UWP 或命令语法自动转换成其他系统的等价内容。
+
+可用 `--data "数据库完整路径"` 指定独立数据库。自定义路径不自动导入旧库；该选项也便于使用数据副本验证。加载错误不会被默认数据覆盖。旧版若仅在 WebView localStorage 中保存过数据，请先运行旧版让其写入 SQLite，再启动新版。
+
+错误异步写入程序所在目录的 `logs/launcher.log`，该目录必须可写。设置和条目保存在 SQLite 中，继续兼容旧表结构；没有新增独立配置文件。
+
+## 开发与构建
+
+Go 工具链通过 [mise](https://mise.jdx.dev/) 管理，版本固定为 1.27.1；MyGo 和 SQLite 依赖由 `go.mod` / `go.sum` 锁定。构建脚本仅使用 Python 标准库。
+
+```sh
+mise install go@1.27.1
+mise exec go@1.27.1 -- go run ./cmd/quickstart
+mise exec go@1.27.1 -- go test ./...
+mise exec go@1.27.1 -- go test -race ./...
+mise exec go@1.27.1 -- go vet ./...
+```
+
+```sh
+python -X utf8 "scripts/build.py" --os windows --arch amd64
+python -X utf8 "scripts/build.py" --os darwin --arch arm64
+python -X utf8 "scripts/build.py" --os linux --arch amd64
+```
+
+`--arch` 支持 `amd64` 和 `arm64`；macOS 输出包含 Info.plist 的 `.app`。所有平台以 `CGO_ENABLED=0` 构建，运行时使用 MyGo 的原生系统接口。Linux 动态加载桌面系统库，不能将“无 CGO 编译”理解为“不需要桌面库”。
+
+源代码：`cmd/quickstart` 为入口，`internal/launcher` 为原生界面及交互，`internal/model` 为状态，`internal/store` 为 SQLite 和迁移，`internal/platform` 为平台启动及快捷方式，`internal/logging` 为异步日志。

@@ -11,9 +11,10 @@ func TestNormalizeSettings(t *testing.T) {
 	s.Settings.CardHeight = 40
 	s.Settings.CardIconScale = 128
 	s.Settings.FontSize = math.Inf(1)
+	s.Settings.FontFamily = " "
 	s.ActiveGroupID = "missing"
 	s.Normalize()
-	if s.Settings.CardIconScale != 33 || s.Settings.FontSize != 13 || s.ActiveGroupID != s.Groups[0].ID {
+	if s.Settings.CardIconScale != 33 || s.Settings.FontSize != 13 || s.Settings.FontFamily != "system" || s.ActiveGroupID != s.Groups[0].ID {
 		t.Fatalf("unexpected normalized state: %+v", s)
 	}
 	if err := s.Validate(); err != nil {
