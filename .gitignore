@@ -1,0 +1,6 @@
+__tmp/
+.pi/
+logs/
+bin/
+*.exe
+*.test
