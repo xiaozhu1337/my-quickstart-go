@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -66,11 +67,13 @@ func ID() string {
 	return hex.EncodeToString(b[:])
 }
 
+var DefaultLanguage = "en"
+
 func Default() State {
 	g := Group{ID: ID(), Name: "Group-1", Apps: []Entry{}}
-	return State{Version: 1, ActiveGroupID: g.ID, Groups: []Group{g}, Settings: Settings{
-		Language: "zh-CN", CardWidth: 120, CardHeight: 96, Theme: "dark", SidebarWidth: 140,
-		FontFamily: "Segoe UI", FontSize: 13, CardFontSize: 11, CardIconScale: 56,
+	return State{Version: 1, ActiveGroupID: g.ID, Groups: []Group{g, {ID: ID(), Name: "reverse", Apps: []Entry{}}, {ID: ID(), Name: "pentest", Apps: []Entry{}}}, Settings: Settings{
+		Language: DefaultLanguage, CardWidth: 120, CardHeight: 96, Theme: "dark", SidebarWidth: 140,
+		FontFamily: "maye", FontSize: 13, CardFontSize: 11, CardIconScale: 56,
 		DblClickBlankToHide: true, AlwaysOnTop: true,
 	}}
 }
@@ -78,18 +81,18 @@ func Default() State {
 func (s *State) Normalize() {
 	s.Version = 1
 	v := &s.Settings
-	if v.Language != "en" {
-		v.Language = "zh-CN"
+	if v.Language != "zh-CN" && v.Language != "en" {
+		v.Language = DefaultLanguage
 	}
 	if v.Theme != "light" {
 		v.Theme = "dark"
 	}
-	v.CardWidth = clamp(v.CardWidth, 72, 240, 120)
-	v.CardHeight = clamp(v.CardHeight, 64, 200, 96)
-	v.SidebarWidth = clamp(v.SidebarWidth, 80, 320, 140)
-	v.FontSize = clamp(v.FontSize, 10, 24, 13)
-	v.CardFontSize = clamp(v.CardFontSize, 8, 24, 11)
-	v.CardIconScale = clamp(v.CardIconScale, 16, min(v.CardWidth, v.CardHeight)*0.82, 56)
+	v.CardWidth = clamp(v.CardWidth, 50, 480, 120)
+	v.CardHeight = clamp(v.CardHeight, 40, 360, 96)
+	v.SidebarWidth = clamp(v.SidebarWidth, 90, 320, 140)
+	v.FontSize = clamp(v.FontSize, 10, 22, 13)
+	v.CardFontSize = clamp(v.CardFontSize, 9, 18, 11)
+	v.CardIconScale = clamp(v.CardIconScale, 16, math.Round(min(v.CardWidth, v.CardHeight)*0.82), 56)
 	if strings.TrimSpace(v.FontFamily) == "" {
 		v.FontFamily = "Segoe UI"
 	}
@@ -103,10 +106,10 @@ func (s *State) Normalize() {
 }
 
 func clamp(v, lo, hi, fallback float64) float64 {
-	if v == 0 {
+	if math.IsNaN(v) || math.IsInf(v, 0) || v == 0 {
 		v = fallback
 	}
-	return max(lo, min(hi, v))
+	return max(lo, min(hi, math.Round(v)))
 }
 
 func (s *State) Group(id string) *Group {
@@ -147,9 +150,6 @@ func (s State) Validate() error {
 				return errors.New("invalid or duplicate entry")
 			}
 			seen[e.ID] = true
-			if err := ValidateEnv(e.EnvVars); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
