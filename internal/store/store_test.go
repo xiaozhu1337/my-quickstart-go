@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -74,41 +73,6 @@ func TestStoreSaveLoadAndReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertState(t, want, got)
-}
-
-func TestBackupRoundTrips(t *testing.T) {
-	for _, ext := range []string{".json", ".yaml", ".yml", ".db", ".YAML"} {
-		t.Run(ext, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "backup"+ext)
-			want := sampleState()
-			if err := WriteBackup(path, want); err != nil {
-				t.Fatal(err)
-			}
-			got, err := ReadBackup(path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			assertState(t, want, got)
-			want.Groups[0].Name = "替换备份"
-			if err = WriteBackup(path, want); err != nil {
-				t.Fatal(err)
-			}
-			got, err = ReadBackup(path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			assertState(t, want, got)
-			if ext == ".yaml" {
-				raw, readErr := os.ReadFile(path)
-				if readErr != nil {
-					t.Fatal(readErr)
-				}
-				if bytes.HasPrefix(raw, []byte{0xef, 0xbb, 0xbf}) || !strings.Contains(string(raw), "# 配置格式版本") || !strings.Contains(string(raw), "# 启动环境变量") {
-					t.Fatal("missing YAML comments or unexpected BOM")
-				}
-			}
-		})
-	}
 }
 
 func TestSaveRollback(t *testing.T) {
@@ -182,22 +146,16 @@ func writeLegacyDB(t *testing.T, path string, optionalColumns bool) {
 }
 
 func TestLegacySQLiteAndMigration(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("Windows legacy migration")
-	}
-	t.Setenv("APPDATA", t.TempDir())
 	for _, optional := range []bool{false, true} {
 		t.Run(map[bool]string{false: "old-columns", true: "current-columns"}[optional], func(t *testing.T) {
-			base := t.TempDir()
-			t.Setenv("LOCALAPPDATA", base)
-			legacy := filepath.Join(base, "my-quickstart", "launcher.db")
+			legacy := isolateMigrationPaths(t, true)[0]
 			writeLegacyDB(t, legacy, optional)
 			before, err := os.ReadFile(legacy)
 			if err != nil {
 				t.Fatal(err)
 			}
 			oldDir, _ := os.ReadDir(filepath.Dir(legacy))
-			want, err := ReadBackup(legacy)
+			want, err := readLegacyState(legacy)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -247,13 +205,7 @@ func TestLegacySQLiteAndMigration(t *testing.T) {
 }
 
 func TestInvalidLegacyMigrationDoesNotCreateDatabase(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("Windows legacy migration")
-	}
-	t.Setenv("APPDATA", t.TempDir())
-	base := t.TempDir()
-	t.Setenv("LOCALAPPDATA", base)
-	legacy := filepath.Join(base, "my-quickstart", "launcher.db")
+	legacy := isolateMigrationPaths(t, true)[0]
 	if err := os.MkdirAll(filepath.Dir(legacy), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -271,99 +223,6 @@ func TestInvalidLegacyMigrationDoesNotCreateDatabase(t *testing.T) {
 	after, _ := os.ReadFile(legacy)
 	if !bytes.Equal(raw, after) {
 		t.Fatal("invalid legacy database changed")
-	}
-}
-
-func TestLegacyJSONAndYAMLSettingsDefaults(t *testing.T) {
-	for _, ext := range []string{".json", ".yaml"} {
-		t.Run(ext, func(t *testing.T) {
-			raw := `{"version":1,"activeGroupId":"g","groups":[{"id":"g","name":"旧配置","apps":[{"id":"a","name":"程序","path":"a.exe","addedAt":123,"args":null,"envVars":null,"icon":null}]}],"settings":{"cardSize":150,"hideOnStartup":true,"alwaysOnTop":false}}`
-			if ext == ".yaml" {
-				raw = "version: 1\nactiveGroupId: g\ngroups:\n  - id: g\n    name: 旧配置\n    apps: []\nsettings:\n  hideOnStartup: true\n  alwaysOnTop: false\n"
-			}
-			path := filepath.Join(t.TempDir(), "old"+ext)
-			if err := os.WriteFile(path, []byte(raw), 0600); err != nil {
-				t.Fatal(err)
-			}
-			got, err := ReadBackup(path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defaults := model.Default().Settings
-			if !got.Settings.HideOnStartup || got.Settings.AlwaysOnTop || !got.Settings.DblClickBlankToHide || got.Settings.FontSize != defaults.FontSize || got.Settings.FontFamily != defaults.FontFamily {
-				t.Fatalf("settings defaults changed: %+v", got.Settings)
-			}
-			if ext == ".json" && got.Settings.CardWidth != 150 {
-				t.Fatal("cardSize alias not read")
-			}
-		})
-	}
-}
-
-func TestReadBackupRejectsInvalidInput(t *testing.T) {
-	cases := map[string]string{
-		"empty.json":           "",
-		"invalid.json":         "{",
-		"unknown-version.json": `{"version":99,"groups":[{"id":"g","name":"g","apps":[]}]}`,
-		"duplicate-id.json":    `{"version":1,"groups":[{"id":"g","name":"g","apps":[{"id":"g","name":"a","path":"x"}]}]}`,
-		"unknown-field.json":   `{"version":1,"groups":[],"garbage":true}`,
-		"wrong-settings.json":  `{"version":1,"groups":[{"id":"g","name":"g","apps":[]}],"settings":{"alwaysOnTop":"false"}}`,
-		"trailing.json":        `{"version":1} {}`,
-		"invalid.yaml":         "version: [",
-		"unknown-version.yaml": "version: 9\ngroups: []\n",
-		"duplicate-id.yaml":    "version: 1\ngroups:\n- id: g\n  name: g\n  apps: []\n- id: g\n  name: g\n  apps: []\n",
-		"extra-document.yaml":  "version: 1\n---\nversion: 1\n",
-		"duplicate-key.yaml":   "version: 1\nversion: 1\n",
-		"invalid.db":           "not SQLite",
-		"wrong-extension.txt":  "{}",
-	}
-	for name, raw := range cases {
-		t.Run(name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), name)
-			if err := os.WriteFile(path, []byte(raw), 0600); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := ReadBackup(path); err == nil {
-				t.Fatal("invalid backup accepted")
-			}
-		})
-	}
-	t.Run("size-limit", func(t *testing.T) {
-		path := filepath.Join(t.TempDir(), "large.json")
-		file, err := os.Create(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err = file.Truncate(MaxBackupSize + 1); err != nil {
-			file.Close()
-			t.Fatal(err)
-		}
-		file.Close()
-		if _, err = ReadBackup(path); err == nil || !strings.Contains(err.Error(), "exceeds") {
-			t.Fatalf("size limit missing: %v", err)
-		}
-	})
-}
-
-func TestFailedBackupPreservesDestination(t *testing.T) {
-	for _, ext := range []string{".json", ".yaml", ".db"} {
-		t.Run(ext, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "saved"+ext)
-			original := sampleState()
-			if err := WriteBackup(path, original); err != nil {
-				t.Fatal(err)
-			}
-			before, _ := os.ReadFile(path)
-			invalid := sampleState()
-			invalid.Version = 2
-			if err := WriteBackup(path, invalid); err == nil {
-				t.Fatal("invalid export succeeded")
-			}
-			after, _ := os.ReadFile(path)
-			if !bytes.Equal(before, after) {
-				t.Fatal("failed export changed destination")
-			}
-		})
 	}
 }
 
@@ -392,7 +251,7 @@ func TestSQLiteInvalidData(t *testing.T) {
 		"duplicate-id":         `UPDATE apps SET id='legacy-group'`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "old.db")
+			path := isolateMigrationPaths(t, true)[0]
 			writeLegacyDB(t, path, true)
 			db, err := connect(path, "rw")
 			if err != nil {
@@ -403,8 +262,15 @@ func TestSQLiteInvalidData(t *testing.T) {
 				t.Fatal(err)
 			}
 			db.Close()
-			if _, err = ReadBackup(path); err == nil {
+			if _, err = readLegacyState(path); err == nil {
 				t.Fatal("invalid database accepted")
+			}
+			destination, _ := DefaultPath()
+			if _, err = Open(destination); err == nil {
+				t.Fatal("invalid state migrated")
+			}
+			if _, err = os.Stat(destination); !os.IsNotExist(err) {
+				t.Fatal("failed load published destination")
 			}
 		})
 	}

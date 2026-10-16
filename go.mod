@@ -4,7 +4,6 @@ go 1.27.1
 
 require (
 	github.com/egoist/mygo v0.0.0-20261016141212-a83f75f2659e
-	go.yaml.in/yaml/v3 v3.0.5
 	modernc.org/sqlite v1.60.1
 )
 

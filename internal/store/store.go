@@ -64,17 +64,14 @@ func Open(path string) (*Store, error) {
 			if pathErr != nil {
 				return nil, pathErr
 			}
-			if runtime.GOOS == "windows" && strings.EqualFold(path, defaultPath) {
-				legacyPaths := []string{
-					filepath.Join(os.Getenv("LOCALAPPDATA"), "my-quickstart", "launcher.db"),
-					filepath.Join(os.Getenv("LOCALAPPDATA"), "com.cat.tauri-app", "launcher.db"),
-				}
-				if base := os.Getenv("APPDATA"); base != "" {
-					legacyPaths = append(legacyPaths, filepath.Join(base, "com.cat.tauri-app", "launcher.db"))
+			if path == defaultPath || (runtime.GOOS == "windows" && strings.EqualFold(path, defaultPath)) {
+				legacyPaths, legacyErr := legacyDatabasePaths()
+				if legacyErr != nil {
+					return nil, legacyErr
 				}
 				for _, legacy := range legacyPaths {
 					if _, statErr := os.Stat(legacy); statErr == nil {
-						state, err = readSQLiteBackup(legacy)
+						state, err = readLegacyState(legacy)
 						if err != nil {
 							return nil, fmt.Errorf("import legacy database %s: %w", legacy, err)
 						}
@@ -338,32 +335,27 @@ func (s *Store) Save(state model.State) error {
 	return tx.Commit()
 }
 
-func createDatabase(path string, state model.State) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+func createDatabase(path string, state model.State) (err error) {
+	if err = os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	temp, err := os.CreateTemp(filepath.Dir(path), ".launcher-*.db")
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return err
 	}
-	tempPath := temp.Name()
-	defer os.Remove(tempPath)
-	if err = temp.Close(); err != nil {
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, os.Remove(path))
+		}
+	}()
+	if err = file.Close(); err != nil {
 		return err
 	}
-	db, err := connect(tempPath, "rw")
+	db, err := connect(path, "rw")
 	if err != nil {
 		return err
 	}
-	s := &Store{db: db, path: tempPath}
+	s := &Store{db: db, path: path}
 	err = s.Save(state)
-	closeErr := s.Close()
-	if err != nil {
-		return err
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	// Publishing by hard link never replaces a database created by another process.
-	return os.Link(tempPath, path)
+	return errors.Join(err, s.Close())
 }
