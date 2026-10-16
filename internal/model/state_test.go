@@ -22,6 +22,31 @@ func TestNormalizeSettings(t *testing.T) {
 	}
 }
 
+func TestNormalizeTheme(t *testing.T) {
+	for _, tc := range []struct {
+		theme string
+		want  string
+	}{
+		{theme: "dark", want: "dark"},
+		{theme: "light", want: "light"},
+		{theme: "midnight", want: "midnight"},
+		{theme: "forest", want: "forest"},
+		{theme: "rose", want: "rose"},
+		{theme: "", want: "dark"},
+		{theme: "unknown", want: "dark"},
+		{theme: "system", want: "dark"},
+	} {
+		t.Run(tc.theme, func(t *testing.T) {
+			s := Default()
+			s.Settings.Theme = tc.theme
+			s.Normalize()
+			if s.Settings.Theme != tc.want {
+				t.Fatalf("normalized theme: want %q, got %q", tc.want, s.Settings.Theme)
+			}
+		})
+	}
+}
+
 func TestValidatePreservesLegacyEnvironment(t *testing.T) {
 	s := Default()
 	e := NewEntry("App", "app.exe", "")

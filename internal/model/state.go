@@ -84,7 +84,9 @@ func (s *State) Normalize() {
 	if v.Language != "zh-CN" && v.Language != "en" {
 		v.Language = DefaultLanguage
 	}
-	if v.Theme != "light" {
+	switch v.Theme {
+	case "dark", "light", "midnight", "forest", "rose":
+	default:
 		v.Theme = "dark"
 	}
 	v.CardWidth = clamp(v.CardWidth, 50, 480, 120)
