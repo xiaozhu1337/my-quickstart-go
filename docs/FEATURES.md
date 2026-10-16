@@ -21,7 +21,7 @@
 | Windows .lnk 目标、参数、原快捷方式名称 | COM 解析，失败保留 .lnk 本身 | `internal/platform/shortcut_windows.go` |
 | 相对路径 | 以程序目录为基准；仅影响之后的文件导入 | `internal/platform/platform.go` |
 | 文件、目录、URL、打开所在文件夹、图标 | 原生系统接口；保留旧 data URL 图标 | `internal/platform` |
-| 中英文、深浅主题、字体、字体大小 | 原生主题和字体选择 | `internal/launcher/settings.go`、`view.go` |
+| 中英文、深浅主题、字体、字体大小 | 保留；扩展石墨、纸白、午夜、松林、玫瑰五种主题，点击预览即时应用并自动保存 | `internal/launcher/settings.go`、`theme.go`、`view.go` |
 | 侧栏、卡片宽高、卡片字号、图标大小 | 即时调整及持久化，保留旧范围约束 | `internal/launcher/settings.go`、`internal/model/state.go` |
 | 空白双击隐藏、置顶、启动时隐藏、窗口位置大小 | 保留；恢复时增加屏幕可见性检查 | `internal/launcher/app.go`、`settings.go` |
 | 全局显示/隐藏热键、最小化恢复、热键失败保留旧值 | 使用 MyGo 全局快捷键接口 | `internal/launcher/app.go` |
@@ -52,11 +52,12 @@ Windows 保留原始参数引号和反斜杠，修复旧版将反斜杠当作通
 验证日期：2026-10-17。所有启动验证均使用临时测试数据库，没有打开或改写用户的真实启动器数据库，也没有自动启动其中的条目。
 
 - Windows：`mise exec go@1.27.1 -- go test -race ./...`、`go vet ./...` 通过；覆盖分类/搜索、编辑器、命令、保存快照、保存失败重试、退出保存和普通关闭、无召回入口时的隐藏保护。
-- Windows 实际原生窗口：中文和图标渲染、X 隐藏并保留进程、实际选择托盘“退出”后正常结束进程通过；截图见 `windows-preview.png`。
+- Windows 实际原生窗口：中文和图标渲染、200% 缩放下的主界面与设置页、即时切换纸白配色及标题栏、退出重启后保留主题通过。X 隐藏并保留进程、托盘恢复、实际选择托盘“退出”后正常结束进程通过；截图见 `windows-preview.png`、`settings-preview.png`。
+- 五主题回归：主题合法值归一化、SQLite 保存及重载通过；正文、说明、按钮文字与背景的对比度均不低于 4.5:1。960×620 与 560×380 下依次切换全部主题、设置分组导航、返回主界面、点击开关标签及键盘空格切换通过。
 - MyGo 无窗口测试：实际输入搜索、Esc 清空、按钮新增分类、右键重命名、编辑保存、设置行为开关通过。
 - 平台启动测试：在测试子进程中核对参数及环境变量；Windows .lnk 使用临时快捷方式验证；Linux .desktop 的 Exec、占位符、工作目录和环境变量通过。
 - SQLite：旧列升级、旧设置和 cardSize、任意旧环境变量、事务回滚、旧库损坏保护、已有新库保护、WAL、并发 checkpoint、一致性迁移、大于 64 MiB 数据库和目标独占创建测试通过。
 - Linux amd64：将 model、platform、launcher、store 测试交叉编译后，在 WSL archlinux 中实际执行通过；界面测试使用 MyGo 无窗口测试器。
 - Windows、Linux、macOS 的 amd64 和 arm64 共六种构建通过；macOS `.app` 的 Info.plist 及 PE / ELF / Mach-O 文件头检查通过。
 
-尚未执行 macOS 实机测试或 Linux 桌面会话交互测试。当前 WSL 没有 DISPLAY / WAYLAND_DISPLAY，不能用后台逻辑测试代替 Linux 原生桌面验收。真实 UWP 应用、不同桌面的托盘/热键、IME、高 DPI、多显示器及用户自己的数据迁移仍需在相应机器上验证。macOS 产物尚未签名或公证。
+尚未执行 macOS 实机测试或 Linux 桌面会话交互测试。当前 WSL 没有 DISPLAY / WAYLAND_DISPLAY，不能用后台逻辑测试代替 Linux 原生桌面验收。真实 UWP 应用、不同桌面的托盘/热键、IME、多种 DPI 之间动态切换、多显示器及用户自己的数据迁移仍需在相应机器上验证。macOS 产物尚未签名或公证。此次视觉修改的独立审查代理因工具生成的 Git 分支名无效而未启动；已由主会话复核代码并完成上述测试。
