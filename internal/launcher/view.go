@@ -11,60 +11,67 @@ import (
 )
 
 func (a *App) view(c *ui.Context) {
-	t := ui.DarkTheme()
-	if a.state.Settings.Theme == "light" {
-		t = ui.LightTheme()
-	}
+	t := palette(a.state.Settings.Theme)
 	t.FontSize = float32(a.state.Settings.FontSize)
 	t.Font = fontName(a.state.Settings.FontFamily)
 	c.SetTheme(t)
 	c.Root().Background(t.Background)
-	c.OnShortcut(ui.Cmd, ui.KeyF, func() {
-		a.search.Focus()
-		c.Resolve(a.search).SetTextSelection(0, utf8.RuneCountInString(a.query))
-	})
+	if !a.settingsOpen {
+		c.OnShortcut(ui.Cmd, ui.KeyF, func() {
+			a.search.Focus()
+			c.Resolve(a.search).SetTextSelection(0, utf8.RuneCountInString(a.query))
+		})
+	}
 	c.OnShortcut(0, ui.KeyEscape, func() {
 		if a.query != "" {
 			a.query = ""
 			a.filter()
 		}
 	})
-	ui.Column(c).Fill().Children(func() {
-		ui.Row(c).Padding(12).Gap(8).AlignItems(ui.Center).Children(func() {
-			input := ui.TextInput(c.Key("search"), &a.query).Bind(&a.search).Placeholder(a.text("搜索所有分类中的应用…", "Search all groups…")).Label(a.text("搜索", "Search")).Grow(1)
-			if input.Changed() {
-				a.filter()
+	if a.settingsOpen {
+		a.settingsView(c)
+	} else {
+		ui.Column(c).Fill().Children(func() {
+			ui.Row(c).Padding(18, 20).Gap(12).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, a.text("快速启动", "Quickstart")).FontSize(20).Bold().Margin(0, 12, 0, 0)
+				input := ui.TextInput(c.Key("search"), &a.query).Bind(&a.search).Placeholder(a.text("搜索所有分类…", "Search all groups…")).Label(a.text("搜索", "Search")).Grow(1).Height(38)
+				if input.Changed() {
+					a.filter()
+				}
+				if input.Submitted() && a.selected >= 0 && a.selected < len(a.results) {
+					e := a.results[a.selected]
+					a.deferAction(func() { a.launch(e) })
+				}
+				ui.PrimaryButton(c, a.text("添加", "Add")).Height(38).Menu(func(m *ui.Menu) { a.addMenu(m) })
+			})
+			ui.Divider(c)
+			if ui.Split(c, &a.sidebar, func() { a.sidebarView(c) }, func() {
+				ui.Column(c).Fill().Children(func() {
+					title := a.text("搜索结果", "Search results")
+					if a.query == "" {
+						if g := a.state.Group(a.state.ActiveGroupID); g != nil {
+							title = g.Name
+						}
+					}
+					ui.Row(c).Padding(18, 20, 4, 20).Gap(10).Children(func() {
+						ui.Text(c, title).FontSize(22).Bold().SingleLine().Grow(1)
+						ui.Text(c, fmt.Sprintf(a.text("%d 个条目", "%d items"), len(a.results))).FontSize(11).TextColor(t.TextMuted)
+					})
+					ui.Text(c, a.text("点击启动 · 右键管理 · 拖动排序", "Click to launch · Right click to manage · Drag to arrange")).FontSize(11).TextColor(t.TextMuted).Padding(0, 20, 8, 20)
+					a.gridView(c)
+				})
+			}).Grow(1).Changed() {
+				a.state.Settings.SidebarWidth = float64(a.sidebar)
+				a.changed()
 			}
-			if input.Submitted() && a.selected < len(a.results) {
-				e := a.results[a.selected]
-				a.deferAction(func() { a.launch(e) })
-			}
-			ui.Button(c, a.text("添加", "Add")).Menu(func(m *ui.Menu) { a.addMenu(m) })
+			ui.Divider(c)
+			a.statusView(c)
 		})
-		ui.Divider(c)
-		if ui.Split(c, &a.sidebar, func() { a.sidebarView(c) }, func() { a.gridView(c) }).Grow(1).Changed() {
-			a.state.Settings.SidebarWidth = float64(a.sidebar)
-			a.changed()
-		}
-		ui.Divider(c)
-		ui.Row(c).Padding(6, 12).Gap(12).Children(func() {
-			msg := a.message
-			if msg == "" {
-				msg = fmt.Sprintf(a.text("%d 个条目", "%d items"), len(a.results))
-			}
-			ui.Text(c, msg).FontSize(11).Grow(1).SingleLine().Tooltip(msg)
-			if a.message != "" && ui.Button(c, a.text("清除提示", "Dismiss")).Clicked() {
-				a.message = ""
-			}
-			if a.registeredHotkey != "" {
-				ui.Text(c, a.registeredHotkey).FontSize(11).TextColor(t.TextMuted)
-			}
-		})
-	})
+	}
+
 	a.editorView(c)
 	a.renameView(c)
 	a.addAppsView(c)
-	a.settingsView(c)
 	actions := a.pending
 	a.pending = nil
 	for _, fn := range actions {
@@ -99,20 +106,34 @@ func fontName(name string) string {
 }
 
 func (a *App) sidebarView(c *ui.Context) {
-	side := ui.Column(c).Fill().Padding(8).Gap(8)
+	side := ui.Column(c).Fill().Padding(10).Gap(8).Background(c.Theme().Surface.Alpha(0.5))
 	side.ContextMenu(func(m *ui.Menu) {
 		if m.Item(a.text("添加分类", "Add group")).Chosen() {
 			a.deferAction(a.addGroup)
 		}
 	})
 	side.Children(func() {
+		ui.Text(c, a.text("我的分类", "LIBRARY")).FontSize(10).Bold().TextColor(c.Theme().TextMuted).Padding(10, 6)
 		a.groups.Key = func(i int) any { return a.state.Groups[i].ID }
 		ui.List(c, &a.groups, len(a.state.Groups), func(i int) {
 			g := a.state.Groups[i]
-			row := ui.Button(c.Key(g.ID), g.Name).Label(g.Name).Tooltip(g.Name).WidthPercent(100)
-			if g.ID == a.state.ActiveGroupID {
-				row.Background(c.Theme().Accent.Alpha(0.2))
+			row := ui.ButtonBase(c.Key(g.ID)).Label(g.Name).Tooltip(g.Name).WidthPercent(100).Height(40).Padding(10).Radius(8)
+			active := g.ID == a.state.ActiveGroupID
+			if active {
+				row.Background(c.Theme().Accent.Alpha(0.14)).Border(1, c.Theme().Accent.Alpha(0.25))
+			} else if row.Hovered() {
+				row.Background(c.Theme().SurfaceHover)
 			}
+			row.Children(func() {
+				ui.Row(c).Fill().Gap(6).Children(func() {
+					color := c.Theme().TextMuted
+					if active {
+						color = c.Theme().Text
+					}
+					ui.Text(c, g.Name).SingleLine().TextColor(color).Grow(1)
+					ui.Text(c, fmt.Sprint(len(g.Apps))).FontSize(10).TextColor(c.Theme().TextMuted)
+				})
+			})
 			if row.Clicked() {
 				a.deferAction(func() { a.chooseGroup(g.ID) })
 			}
@@ -143,10 +164,11 @@ func (a *App) sidebarView(c *ui.Context) {
 				a.importPaths(paths, g.ID, "")
 			}
 		}).Grow(1)
-		if ui.Button(c, a.text("新建分类", "New group")).WidthPercent(100).Clicked() {
+		ui.Divider(c).Margin(4, 0)
+		if ui.Button(c, a.text("新建分类", "New group")).WidthPercent(100).Height(34).Clicked() {
 			a.deferAction(a.addGroup)
 		}
-		if ui.Button(c, a.text("设置", "Settings")).WidthPercent(100).Clicked() {
+		if ui.Button(c, a.text("设置", "Settings")).WidthPercent(100).Height(34).Clicked() {
 			a.openSettings()
 		}
 	})
@@ -157,9 +179,16 @@ func (a *App) gridView(c *ui.Context) {
 	a.grid.Label = func(i int) string { return a.results[i].Name }
 	a.grid.Selected = &a.selected
 	if len(a.results) == 0 {
-		ui.Text(c, a.text("右键或点击“添加”创建快捷启动条目，也可以拖入文件。", "Use Add or drop files here to create shortcuts.")).Padding(16).TextColor(c.Theme().TextMuted)
+		ui.Column(c).AlignItems(ui.Center).Gap(8).Padding(30, 16).Children(func() {
+			title, hint := a.text("从一个快捷方式开始", "Your shortcuts belong here"), a.text("点击“添加”或将文件拖入下方区域。", "Use Add or drop files into the space below.")
+			if strings.TrimSpace(a.query) != "" {
+				title, hint = a.text("没有找到匹配的条目", "No matching shortcuts"), a.text("试试其他名称，或清空搜索查看分类。", "Try another name or clear the search to browse groups.")
+			}
+			ui.Text(c, title).FontSize(17).Bold()
+			ui.Text(c, hint).TextColor(c.Theme().TextMuted)
+		})
 	}
-	grid := ui.GridView(c, &a.grid, len(a.results), float32(a.state.Settings.CardWidth), float32(a.state.Settings.CardHeight), func(i int) { a.card(c, i) }).Grow(1).Padding(12).Gap(8)
+	grid := ui.GridView(c, &a.grid, len(a.results), float32(a.state.Settings.CardWidth), float32(a.state.Settings.CardHeight), func(i int) { a.card(c, i) }).Grow(1).Padding(12, 20, 20, 20).Gap(10)
 	grid.ContextMenu(a.addMenu)
 	if grid.Submitted() && a.selected < len(a.results) {
 		e := a.results[a.selected]
@@ -182,12 +211,15 @@ func (a *App) gridView(c *ui.Context) {
 
 func (a *App) card(c *ui.Context, i int) {
 	e := a.results[i]
-	card := ui.ButtonBase(c.Key(e.ID)).Label(e.Name).Tooltip(e.Name).Size(float32(a.state.Settings.CardWidth), float32(a.state.Settings.CardHeight)).Radius(8).Padding(6).Background(c.Theme().Surface)
+	card := ui.ButtonBase(c.Key(e.ID)).Label(e.Name).Tooltip(e.Name).Size(float32(a.state.Settings.CardWidth), float32(a.state.Settings.CardHeight)).Radius(10).Padding(6).Background(c.Theme().Surface).Border(1, c.Theme().Border.Alpha(0.6))
+	if i == a.selected {
+		card.Border(1, c.Theme().Accent.Alpha(0.65))
+	}
 	if a.query == "" {
 		card.Drag(entryDrag{e.ID})
 	}
 	if card.Hovered() {
-		card.Background(c.Theme().SurfaceHover)
+		card.Background(c.Theme().SurfaceHover).Border(1, c.Theme().Accent)
 	}
 	card.Children(func() {
 		ui.Column(c).Fill().Center().Gap(4).Children(func() {
@@ -196,7 +228,9 @@ func (a *App) card(c *ui.Context, i int) {
 				ui.Image(c, icon).Size(size, size)
 			} else {
 				r, _ := utf8.DecodeRuneInString(e.Name)
-				ui.Text(c, strings.ToUpper(string(r))).FontSize(size * 0.6).Height(size)
+				ui.Box(c).Size(size, size).Radius(size * 0.25).Background(c.Theme().Accent.Alpha(0.12)).Center().Children(func() {
+					ui.Text(c, strings.ToUpper(string(r))).FontSize(size * 0.55).Bold().TextColor(c.Theme().Accent)
+				})
 			}
 			ui.Text(c, e.Name).FontSize(float32(a.state.Settings.CardFontSize)).SingleLine().MaxWidth(float32(a.state.Settings.CardWidth - 12))
 		})

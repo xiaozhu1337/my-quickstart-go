@@ -69,6 +69,7 @@ func New(state model.State, p persistence) *App {
 }
 
 func (a *App) Ready() {
+	syncNativeTheme(a.state.Settings.Theme)
 	opts := mygo.WindowOptions{Title: "My Quickstart Go", Width: 960, Height: 620, MinWidth: 560, MinHeight: 380,
 		Hidden: true, AlwaysOnTop: a.state.Settings.AlwaysOnTop, Content: ui.View(a.view)}
 	if b := a.state.Settings.WindowBounds; a.state.Settings.RememberWindowBounds && b != nil && b.Width >= 560 && b.Height >= 380 {
