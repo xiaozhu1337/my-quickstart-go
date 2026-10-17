@@ -1,17 +1,14 @@
 package launcher
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"image"
-	"image/color"
-	"image/png"
 	"log"
 	"strings"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"my-quickstart-go/internal/branding"
 	"my-quickstart-go/internal/model"
 	"my-quickstart-go/internal/platform"
 )
@@ -76,6 +73,9 @@ func New(state model.State, p persistence) *App {
 
 func (a *App) Ready() {
 	syncNativeTheme(a.state.Settings.Theme)
+	if err := mygo.App.Dock.SetIcon(branding.PNG); err != nil {
+		a.report(fmt.Errorf("%s: %w", a.text("无法设置应用图标", "Cannot set application icon"), err))
+	}
 	opts := mygo.WindowOptions{Title: "My Quickstart Go", Width: 960, Height: 620, MinWidth: 560, MinHeight: 380,
 		Hidden: true, AlwaysOnTop: a.state.Settings.AlwaysOnTop, Content: ui.View(a.view)}
 	if b := a.state.Settings.WindowBounds; a.state.Settings.RememberWindowBounds && b != nil && b.Width >= 560 && b.Height >= 380 {
@@ -89,6 +89,9 @@ func (a *App) Ready() {
 		}
 	}
 	a.window = mygo.NewWindow(opts)
+	if err := a.window.SetIcon(branding.PNG); err != nil {
+		a.report(fmt.Errorf("%s: %w", a.text("无法设置窗口图标", "Cannot set window icon"), err))
+	}
 	a.window.OnClose(a.onClose)
 	a.window.OnResize(a.captureBounds)
 	a.window.OnMove(a.captureBounds)
@@ -97,7 +100,7 @@ func (a *App) Ready() {
 		a.report(err)
 	}
 	var err error
-	a.tray, err = mygo.NewTray(mygo.TrayOptions{Icon: trayIcon(), ToolTip: "My Quickstart Go"})
+	a.tray, err = mygo.NewTray(mygo.TrayOptions{Icon: branding.PNG, ToolTip: "My Quickstart Go"})
 	if err != nil {
 		a.report(err)
 	} else {
@@ -313,22 +316,4 @@ func (a *App) icon(e model.Entry) *ui.Bitmap {
 		a.window.Update(func() { a.icons[key] = b; delete(a.iconLoading, key) })
 	}()
 	return nil
-}
-
-func trayIcon() []byte {
-	img := image.NewNRGBA(image.Rect(0, 0, 32, 32))
-	for y := 4; y < 28; y++ {
-		for x := 4; x < 28; x++ {
-			if x < 14 || x >= 18 {
-				if y < 14 || y >= 18 {
-					img.Set(x, y, color.NRGBA{R: 79, G: 124, B: 255, A: 255})
-				}
-			}
-		}
-	}
-	var b bytes.Buffer
-	if err := png.Encode(&b, img); err != nil {
-		log.Print(err)
-	}
-	return b.Bytes()
 }

@@ -12,6 +12,8 @@
 
 设置采用独立页面，按 **外观、布局、行为、快捷键** 分组。常规窗口使用左侧导航，窄窗口改用顶部标签；尺寸设置提供卡片预览。除全局快捷键需要点击“应用”验证注册结果外，其他设置自动保存。
 
+左下角只保留设置入口；在分类侧栏空白处右键选择“添加分类”，分类自身的右键菜单可重命名、移除。窗口、托盘和应用文件统一使用蓝色四格图标：Windows 标题栏与任务栏设置原生图标，exe 内嵌七档尺寸资源，macOS 应用包提供 ICNS 并设置 Dock 图标。Linux 通过 GTK 设置默认及窗口图标，显示位置由桌面环境决定。
+
 ![设置界面](docs/settings-preview.png)
 
 搜索与编辑器预览：[搜索匹配与灰色分类](docs/search-preview.png)、[加宽应用编辑框](docs/editor-preview.png)。
@@ -70,6 +72,6 @@ python -X utf8 "scripts/build.py" --os darwin --arch arm64
 python -X utf8 "scripts/build.py" --os linux --arch amd64
 ```
 
-`--arch` 支持 `amd64` 和 `arm64`；macOS 输出包含 Info.plist 的 `.app`。所有平台以 `CGO_ENABLED=0` 构建，运行时使用 MyGo 的原生系统接口。Linux 动态加载桌面系统库，不能将“无 CGO 编译”理解为“不需要桌面库”。
+`--arch` 支持 `amd64` 和 `arm64`；macOS 输出包含 Info.plist 和图标的 `.app`。图标源文件位于 `internal/branding`；Windows 图标资源已预生成到 `cmd/quickstart/icon_windows_amd64.syso` 和 `cmd/quickstart/icon_windows_arm64.syso`，正常构建不需要资源编译器。更换 ICO 时，可用 LLVM 的 `windres` 编译 `internal/branding/icon.rc` 为 `.res`，再用 `llvm-cvtres /MACHINE:X64` 和 `/MACHINE:ARM64` 分别更新对应 `.syso`。所有平台以 `CGO_ENABLED=0` 构建，运行时使用 MyGo 的原生系统接口。Linux 动态加载桌面系统库，不能将“无 CGO 编译”理解为“不需要桌面库”。
 
 源代码：`cmd/quickstart` 为入口，`internal/launcher` 为原生界面及交互，`internal/model` 为状态，`internal/store` 为 SQLite 和迁移，`internal/platform` 为平台启动及快捷方式，`internal/logging` 为异步日志。

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import plistlib
 import platform
+import shutil
 import subprocess
 import sys
 
@@ -27,7 +28,10 @@ def build(target_os: str, arch: str) -> Path:
         info = {"CFBundleName": "My Quickstart Go", "CFBundleDisplayName": "My Quickstart Go",
                 "CFBundleIdentifier": "com.cat.my-quickstart-go", "CFBundleExecutable": binary.name,
                 "CFBundlePackageType": "APPL", "CFBundleVersion": "1", "CFBundleShortVersionString": "1.0.0",
-                "NSHighResolutionCapable": True}
+                "CFBundleIconFile": "icon.icns", "NSHighResolutionCapable": True}
+        resources = bundle / "Contents" / "Resources"
+        resources.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / "internal" / "branding" / "icon.icns", resources / "icon.icns")
         with (bundle / "Contents" / "Info.plist").open("wb") as handle:
             plistlib.dump(info, handle)
     return binary

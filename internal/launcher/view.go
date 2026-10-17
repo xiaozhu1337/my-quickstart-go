@@ -168,9 +168,6 @@ func (a *App) sidebarView(c *ui.Context) {
 			}
 		}).Grow(1)
 		ui.Divider(c).Margin(4, 0)
-		if ui.Button(c, a.text("新建分类", "New group")).WidthPercent(100).Height(34).Clicked() {
-			a.deferAction(a.addGroup)
-		}
 		if ui.Button(c, a.text("设置", "Settings")).WidthPercent(100).Height(34).Clicked() {
 			a.openSettings()
 		}

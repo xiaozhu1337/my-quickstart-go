@@ -6,7 +6,7 @@
 
 | 原有能力 | 新版实现 | 主要位置 |
 | --- | --- | --- |
-| 分类新增、重命名、删除、选择记忆；保留至少一组 | 保留，初始 Group-1 / reverse / pentest | `internal/launcher/entries.go`、`forms.go` |
+| 分类新增、重命名、删除、选择记忆；保留至少一组 | 侧栏空白处右键添加，分类右键重命名/删除；初始 Group-1 / reverse / pentest | `internal/launcher/entries.go`、`forms.go`、`view.go` |
 | 当前分类卡片、图标、名称、全文提示 | 原生虚拟网格，图片失败使用名称首字符 | `internal/launcher/view.go`、`app.go` |
 | 跨分类名称搜索；空查询回当前组 | trim、忽略大小写、保留组内顺序；新查询自动选中首个匹配组，仅显示所选组结果；零匹配组变灰且不可选，清空搜索回到搜索前分类 | `internal/launcher/entries.go`、`view.go` |
 | Ctrl/Cmd+F、Esc、键盘启动 | 搜索默认收起，快捷键展开聚焦，Esc 清空并收起；网格与按钮键盘行为 | `internal/launcher/view.go` |
@@ -26,6 +26,7 @@
 | 空白双击隐藏、置顶、启动时隐藏、窗口位置大小 | 保留；恢复时增加屏幕可见性检查 | `internal/launcher/app.go`、`settings.go` |
 | 全局显示/隐藏热键、最小化恢复、热键失败保留旧值 | 使用 MyGo 全局快捷键接口 | `internal/launcher/app.go` |
 | 托盘显示/隐藏、退出；普通 X 隐藏 | 退出先保存；无托盘和热键时拒绝隐藏 | `internal/launcher/app.go`、`cmd/quickstart/main.go` |
+| 应用图标 | 统一蓝色四格标识；运行时全局/窗口 PNG，Windows 内嵌七档 ICO 资源，macOS 应用包 ICNS | `internal/branding`、`internal/launcher/app.go`、`scripts/build.py` |
 | SQLite、历史列兼容、旧数据迁移 | 独立新版库，SQLite 一致性读取、事务写入、失败保护 | `internal/store` |
 
 16 个原设置字段均保留：`language`、`theme`、`fontFamily`、`fontSize`、`sidebarWidth`、`cardWidth`、`cardHeight`、`cardFontSize`、`cardIconScale`、`dblClickBlankToHide`、`alwaysOnTop`、`hideOnStartup`、`useRelativePath`、`rememberWindowBounds`、`windowBounds`、`toggleHotkey`。
@@ -41,6 +42,7 @@
 | 命令卡片 | `cmd /D /S /C` | `sh -c` | `sh -c` |
 | 系统应用 | Windows 开始菜单 / AppsFolder | 本机应用枚举 | 本机桌面应用枚举 |
 | .lnk / UWP | 支持 | Windows 专属，不转换 | Windows 专属，不转换 |
+| 应用图标 | 标题栏/任务栏与 exe 资源 | Dock 与应用包，窗口无独立图标 | GTK 全局/窗口图标，显示由桌面决定 |
 | 托盘 | 系统通知区 | 菜单栏 | 需 AppIndicator 库与桌面支持 |
 | 全局快捷键 | 系统接口 | 系统接口 | X11 或 Wayland GlobalShortcuts portal |
 | 置顶、窗口位置 | 系统接口 | 受 macOS 窗口管理约束 | Wayland 位置/置顶受合成器约束 |
@@ -55,12 +57,13 @@ Windows 保留原始参数引号和反斜杠，修复旧版将反斜杠当作通
 - Windows 实际原生窗口：中文和图标渲染、200% 缩放下的主界面与设置页、即时切换纸白配色及标题栏、退出重启后保留主题通过。X 隐藏并保留进程、托盘恢复、实际选择托盘“退出”后正常结束进程通过。当前布局预览 `windows-preview.png`、`settings-preview.png` 使用 MyGo 测试器与示例数据渲染。
 - 界面精简回归：移除重复标题、操作说明、主区域计数和空闲底栏；560 与 960 宽度下跨分类搜索结果数量、错误提示跨页面显示、清除后收起提示栏、返回后保留查询均通过。
 - 搜索与编辑布局回归：默认隐藏搜索与顶部添加按钮；快捷键显示、聚焦及全选原查询，Esc 收起及恢复当前组，分类匹配数随查询更新，右键添加入口和应用选择框标题一致，960×620 与 560×380 的宽编辑框尺寸及保存通过。
-- 搜索分类与拖拽修复回归：新查询选择首个匹配分类，分类间切换仅显示该组匹配项，全零结果时均不可选，清空恢复搜索前分类通过；560 与 960 宽度下卡片前后、行间与卡片周围空隙落点、跨行移动、让位预览、Esc 取消、跨分类移动、搜索禁用重排通过。快速释放提交已显示落点、80 条目虚拟网格滚动后预览稳定通过；Windows 200% 原生窗口拖动预览及 SQLite 实际保存顺序通过，见 [拖动预览](drag-preview.png)。
+- 搜索分类与拖拽修复回归：新查询选择首个匹配分类，分类间切换仅显示该组匹配项，全零结果时均不可选，清空恢复搜索前分类通过；560 与 960 宽度下卡片前后、行间与卡片周围空隙落点、跨行移动、让位预览、Esc 取消、跨分类移动、搜索禁用重排通过。快速释放提交已显示落点、80 条目虚拟网格滚动后预览稳定通过；Windows 200% 原生窗口拖动预览及 SQLite 实际保存顺序通过。当前 [拖动预览](drag-preview.png) 由 MyGo 无窗口测试器渲染。
 - 五主题回归：主题合法值归一化、SQLite 保存及重载通过；正文、说明、按钮文字与背景的对比度均不低于 4.5:1。960×620 与 560×380 下依次切换全部主题、设置分组导航、返回主界面、点击开关标签及键盘空格切换通过。
-- MyGo 无窗口测试：实际输入搜索、Esc 清空、按钮新增分类、右键重命名、编辑保存、设置行为开关通过。
+- MyGo 无窗口测试：实际输入搜索、Esc 清空、侧栏空白处右键新增分类、右键重命名、编辑保存、设置行为开关通过；确认左下角不再显示新增分类按钮。
+- 应用图标无窗口校验：嵌入 PNG 解码与透明区域检查通过；Windows x64/ARM64 exe 的图标资源 ID 1 包含 16/24/32/48/64/128/256 七档尺寸，PNG 均与条目尺寸一致；运行时 PNG 被 Win32 图标创建接口接受，图标句柄随即释放。两个 macOS 应用包的 ICNS 与 Info.plist 引用检查通过。此次图标改动没有打开应用窗口验证外观。
 - 平台启动测试：在测试子进程中核对参数及环境变量；Windows .lnk 使用临时快捷方式验证；Linux .desktop 的 Exec、占位符、工作目录和环境变量通过。
 - SQLite：旧列升级、旧设置和 cardSize、任意旧环境变量、事务回滚、旧库损坏保护、已有新库保护、WAL、并发 checkpoint、一致性迁移、大于 64 MiB 数据库和目标独占创建测试通过。
-- Linux amd64：将 model、platform、launcher、store 测试交叉编译后，在 WSL archlinux 中实际执行通过；界面测试使用 MyGo 无窗口测试器。
+- Linux amd64：将 model、platform、launcher、store 测试交叉编译后，在 WSL archlinux 中实际执行通过；本次分类入口与图标改动也实际运行 branding、launcher 测试通过，界面测试使用 MyGo 无窗口测试器。
 - Windows、Linux、macOS 的 amd64 和 arm64 共六种构建通过；macOS `.app` 的 Info.plist 及 PE / ELF / Mach-O 文件头检查通过。
 
-尚未执行 macOS 实机测试或 Linux 桌面会话交互测试。当前 WSL 没有 DISPLAY / WAYLAND_DISPLAY，不能用后台逻辑测试代替 Linux 原生桌面验收。真实 UWP 应用、不同桌面的托盘/热键、IME、多种 DPI 之间动态切换、多显示器及用户自己的数据迁移仍需在相应机器上验证。macOS 产物尚未签名或公证。此次视觉修改的独立审查代理因工具生成的 Git 分支名无效而未启动；已由主会话复核代码并完成上述测试。
+尚未执行 macOS 实机测试或 Linux 桌面会话交互测试。当前 WSL 没有 DISPLAY / WAYLAND_DISPLAY，不能用后台逻辑测试代替 Linux 原生桌面验收。真实 UWP 应用、不同桌面的托盘/热键、IME、多种 DPI 之间动态切换、多显示器及用户自己的数据迁移仍需在相应机器上验证。macOS 产物尚未签名或公证。早期主题修改的独立审查代理因工具生成的 Git 分支名无效而未启动；当时由主会话复核代码并完成测试。

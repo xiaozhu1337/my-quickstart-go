@@ -106,11 +106,15 @@ func TestNativeViewSearchGroupsAndEditor(t *testing.T) {
 	if _, visible := tt.Find("Search"); visible {
 		t.Fatal("the search field must be removed after Escape")
 	}
-	if err := tt.Click("New group"); err != nil {
+	if tt.HasText("New group") {
+		t.Fatal("sidebar must not show the new group button")
+	}
+	tt.RightClickAt(20, 200)
+	if err := tt.ChooseMenuItem("Add group"); err != nil {
 		t.Fatal(err)
 	}
 	if len(a.state.Groups) != 4 {
-		t.Fatal("new group button did not create a group")
+		t.Fatal("sidebar context menu did not create a group")
 	}
 	if err := tt.RightClick("Group-1"); err != nil {
 		t.Fatal(err)
