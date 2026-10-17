@@ -27,7 +27,7 @@ def build(target_os: str, arch: str) -> Path:
     if target_os == "darwin":
         info = {"CFBundleName": "My Quickstart Go", "CFBundleDisplayName": "My Quickstart Go",
                 "CFBundleIdentifier": "com.cat.my-quickstart-go", "CFBundleExecutable": binary.name,
-                "CFBundlePackageType": "APPL", "CFBundleVersion": "1", "CFBundleShortVersionString": "1.0.0",
+                "CFBundlePackageType": "APPL", "CFBundleVersion": "2", "CFBundleShortVersionString": "1.0.1",
                 "CFBundleIconFile": "icon.icns", "NSHighResolutionCapable": True}
         resources = bundle / "Contents" / "Resources"
         resources.mkdir(parents=True, exist_ok=True)
