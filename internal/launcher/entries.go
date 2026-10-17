@@ -16,20 +16,54 @@ func (a *App) filter() {
 	a.results = a.results[:0]
 	a.matches = make(map[string]int, len(a.state.Groups))
 	q := strings.ToLower(strings.TrimSpace(a.query))
+	firstMatch := ""
 	for _, g := range a.state.Groups {
+		if q == "" {
+			a.matches[g.ID] = len(g.Apps)
+		} else {
+			for _, e := range g.Apps {
+				if strings.Contains(strings.ToLower(e.Name), q) {
+					a.matches[g.ID]++
+				}
+			}
+		}
+		if firstMatch == "" && a.matches[g.ID] > 0 {
+			firstMatch = g.ID
+		}
+	}
+	if q != "" {
+		if a.filteredQuery == "" {
+			a.browseGroupID = a.state.ActiveGroupID
+		}
+		if firstMatch != "" && (q != a.filteredQuery || a.matches[a.state.ActiveGroupID] == 0) {
+			a.state.ActiveGroupID = firstMatch
+			a.selected = 0
+		}
+	} else if a.filteredQuery != "" {
+		if a.state.Group(a.browseGroupID) != nil {
+			a.state.ActiveGroupID = a.browseGroupID
+		}
+		a.browseGroupID = ""
+	}
+	a.filteredQuery = q
+	if g := a.state.Group(a.state.ActiveGroupID); g != nil {
 		for _, e := range g.Apps {
 			if q == "" || strings.Contains(strings.ToLower(e.Name), q) {
-				a.matches[g.ID]++
-				if q != "" || g.ID == a.state.ActiveGroupID {
-					a.results = append(a.results, e)
-				}
+				a.results = append(a.results, e)
 			}
 		}
 	}
 	a.selected = max(0, min(a.selected, len(a.results)-1))
 }
 
-func (a *App) chooseGroup(id string) { a.state.ActiveGroupID = id; a.selected = 0; a.changed() }
+func (a *App) chooseGroup(id string) {
+	if a.state.Group(id) == nil || (strings.TrimSpace(a.query) != "" && a.matches[id] == 0) {
+		return
+	}
+	a.state.ActiveGroupID = id
+	a.selected = 0
+	a.changed()
+}
 
 func (a *App) addGroup() {
 	count := 0

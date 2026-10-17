@@ -110,8 +110,9 @@ func (a *App) sidebarView(c *ui.Context) {
 		ui.List(c, &a.groups, len(a.state.Groups), func(i int) {
 			g := a.state.Groups[i]
 			row := ui.ButtonBase(c.Key(g.ID)).Label(g.Name).Tooltip(g.Name).WidthPercent(100).Height(40).Padding(10).Radius(8)
-			active := g.ID == a.state.ActiveGroupID
 			noMatches := strings.TrimSpace(a.query) != "" && a.matches[g.ID] == 0
+			row.Disabled(noMatches)
+			active := g.ID == a.state.ActiveGroupID && !noMatches
 			accent := c.Theme().Accent
 			if noMatches {
 				gray := uint8(96)
@@ -190,7 +191,8 @@ func (a *App) gridView(c *ui.Context) {
 			ui.Text(c, hint).TextColor(c.Theme().TextMuted)
 		})
 	}
-	grid := ui.GridView(c, &a.grid, len(a.results), float32(a.state.Settings.CardWidth), float32(a.state.Settings.CardHeight), func(i int) { a.card(c, i) }).Grow(1).Padding(12, 20, 20, 20).Gap(10)
+	var slots []dragSlot
+	grid := ui.GridView(c, &a.grid, len(a.results), float32(a.state.Settings.CardWidth), float32(a.state.Settings.CardHeight), func(i int) { slots = append(slots, a.card(c, i)) }).Grow(1).Padding(12, 20, 20, 20).Gap(10)
 	grid.ContextMenu(a.addMenu)
 	if grid.Submitted() && a.selected < len(a.results) {
 		e := a.results[a.selected]
@@ -199,77 +201,69 @@ func (a *App) gridView(c *ui.Context) {
 	if grid.DoubleClicked() && a.state.Settings.DblClickBlankToHide {
 		a.deferAction(a.hide)
 	}
-	if _, over := ui.DragOver[entryDrag](grid); over {
-		grid.Border(1, c.Theme().Accent)
-	}
-	if drag, ok := ui.Drop[entryDrag](grid); ok {
-		groupID := a.state.ActiveGroupID
-		a.deferAction(func() { a.moveEntry(drag.ID, groupID, "") })
+	if strings.TrimSpace(a.query) == "" {
+		a.previewReorder(c, grid, slots)
 	}
 	if paths := grid.DroppedFiles(); len(paths) > 0 {
 		a.importPaths(paths, a.state.ActiveGroupID, "$end")
 	}
 }
 
-func (a *App) card(c *ui.Context, i int) {
+func (a *App) card(c *ui.Context, i int) dragSlot {
 	e := a.results[i]
-	card := ui.ButtonBase(c.Key(e.ID)).Label(e.Name).Tooltip(e.Name).Size(float32(a.state.Settings.CardWidth), float32(a.state.Settings.CardHeight)).Radius(10).Padding(6).Background(c.Theme().Surface).Border(1, c.Theme().Border.Alpha(0.6))
-	if i == a.selected {
-		card.Border(1, c.Theme().Accent.Alpha(0.65))
-	}
-	if a.query == "" {
-		card.Drag(entryDrag{e.ID})
-	}
-	if card.Hovered() {
-		card.Background(c.Theme().SurfaceHover).Border(1, c.Theme().Accent)
-	}
-	card.Children(func() {
-		ui.Column(c).Fill().Center().Gap(4).Children(func() {
-			size := float32(a.state.Settings.CardIconScale * 0.72)
-			if icon := a.icon(e); icon != nil {
-				ui.Image(c, icon).Size(size, size)
-			} else {
-				r, _ := utf8.DecodeRuneInString(e.Name)
-				ui.Box(c).Size(size, size).Radius(size * 0.25).Background(c.Theme().Accent.Alpha(0.12)).Center().Children(func() {
-					ui.Text(c, strings.ToUpper(string(r))).FontSize(size * 0.55).Bold().TextColor(c.Theme().Accent)
-				})
-			}
-			ui.Text(c, e.Name).FontSize(float32(a.state.Settings.CardFontSize)).SingleLine().MaxWidth(float32(a.state.Settings.CardWidth - 12))
+	slot := ui.Box(c).FillWidth().Height(float32(a.state.Settings.CardHeight))
+	var card ui.Element
+	slot.Children(func() {
+		card = ui.ButtonBase(c.Key(e.ID)).Label(e.Name).Tooltip(e.Name).Size(float32(a.state.Settings.CardWidth), float32(a.state.Settings.CardHeight)).Radius(10).Padding(6).Background(c.Theme().Surface).Border(1, c.Theme().Border.Alpha(0.6))
+		if i == a.selected {
+			card.Border(1, c.Theme().Accent.Alpha(0.65))
+		}
+		if strings.TrimSpace(a.query) == "" {
+			card.Drag(entryDrag{e.ID})
+		}
+		if card.Hovered() {
+			card.Background(c.Theme().SurfaceHover).Border(1, c.Theme().Accent)
+		}
+		card.Children(func() {
+			ui.Column(c).Fill().Center().Gap(4).Children(func() {
+				size := float32(a.state.Settings.CardIconScale * 0.72)
+				if icon := a.icon(e); icon != nil {
+					ui.Image(c, icon).Size(size, size)
+				} else {
+					r, _ := utf8.DecodeRuneInString(e.Name)
+					ui.Box(c).Size(size, size).Radius(size * 0.25).Background(c.Theme().Accent.Alpha(0.12)).Center().Children(func() {
+						ui.Text(c, strings.ToUpper(string(r))).FontSize(size * 0.55).Bold().TextColor(c.Theme().Accent)
+					})
+				}
+				ui.Text(c, e.Name).FontSize(float32(a.state.Settings.CardFontSize)).SingleLine().MaxWidth(float32(a.state.Settings.CardWidth - 12))
+			})
 		})
-	})
-	if card.Clicked() {
-		a.selected = i
-		a.deferAction(func() { a.launch(e) })
-	}
-	card.ContextMenu(func(m *ui.Menu) {
-		if m.Item(a.text("打开", "Open")).Chosen() {
+		if card.Clicked() {
+			a.selected = i
 			a.deferAction(func() { a.launch(e) })
 		}
-		if m.Item(a.text("打开所在文件夹", "Open containing folder")).Chosen() {
-			a.deferAction(func() { go func() { err := platform.OpenFolder(e.Path); a.window.Update(func() { a.report(err) }) }() })
-		}
-		if m.Item(a.text("编辑", "Edit")).Chosen() {
-			a.openEditor(e)
-		}
-		if m.Item(a.text("移除", "Remove")).Chosen() {
-			a.deferAction(func() { a.removeEntry(e.ID) })
-		}
+		card.ContextMenu(func(m *ui.Menu) {
+			if m.Item(a.text("打开", "Open")).Chosen() {
+				a.deferAction(func() { a.launch(e) })
+			}
+			if m.Item(a.text("打开所在文件夹", "Open containing folder")).Chosen() {
+				a.deferAction(func() { go func() { err := platform.OpenFolder(e.Path); a.window.Update(func() { a.report(err) }) }() })
+			}
+			if m.Item(a.text("编辑", "Edit")).Chosen() {
+				a.openEditor(e)
+			}
+			if m.Item(a.text("移除", "Remove")).Chosen() {
+				a.deferAction(func() { a.removeEntry(e.ID) })
+			}
+		})
 	})
-	if a.query == "" {
-		if _, ok := ui.DragOver[entryDrag](card); ok {
-			card.Border(2, c.Theme().Accent)
-		}
-		if drag, ok := ui.Drop[entryDrag](card); ok {
-			groupID := a.state.ActiveGroupID
-			a.deferAction(func() { a.moveEntry(drag.ID, groupID, e.ID) })
-		}
-	}
 	if card.FileDragOver() {
 		card.Border(2, c.Theme().Accent)
 	}
 	if paths := card.DroppedFiles(); len(paths) > 0 {
 		a.importPaths(paths, a.state.ActiveGroupID, e.ID)
 	}
+	return dragSlot{index: i, bounds: slot.Bounds(), card: card}
 }
 
 func (a *App) addMenu(m *ui.Menu) {

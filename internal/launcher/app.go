@@ -23,6 +23,10 @@ type App struct {
 	tray             *mygo.Tray
 	query            string
 	searchOpen       bool
+	filteredQuery    string
+	browseGroupID    string
+	dragPreviewID    string
+	dragBeforeID     string
 	matches          map[string]int
 	results          []model.Entry
 	selected         int
