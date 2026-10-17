@@ -135,7 +135,3 @@ func InstalledApps() ([]model.Entry, error) {
 	}
 	return entries, nil
 }
-
-func fileIcon(path string, size int) ([]byte, error) {
-	return mygo.Shell.FileIcon(path, size)
-}
