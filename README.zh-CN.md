@@ -24,13 +24,15 @@
 
 ## 直接运行
 
-构建脚本生成以下文件，产物位于被 Git 忽略的 `bin` 目录，不随源码仓库上传。请先按照下方的开发与构建说明构建所需版本：
+从 [最新 Release](https://github.com/xiaozhu1337/my-quickstart-go/releases/latest) 下载对应系统和架构的预编译程序，无需安装 Go：
 
 | 平台 | x64 / Intel | ARM64 / Apple Silicon |
 | --- | --- | --- |
-| Windows | `bin/windows-amd64/my-quickstart-go.exe` | `bin/windows-arm64/my-quickstart-go.exe` |
-| macOS | `bin/darwin-amd64/My Quickstart Go.app` | `bin/darwin-arm64/My Quickstart Go.app` |
-| Linux | `bin/linux-amd64/my-quickstart-go` | `bin/linux-arm64/my-quickstart-go` |
+| Windows | [ZIP](https://github.com/xiaozhu1337/my-quickstart-go/releases/latest/download/my-quickstart-go-windows-amd64.zip) | [ZIP](https://github.com/xiaozhu1337/my-quickstart-go/releases/latest/download/my-quickstart-go-windows-arm64.zip) |
+| macOS | [TAR.GZ](https://github.com/xiaozhu1337/my-quickstart-go/releases/latest/download/my-quickstart-go-darwin-amd64.tar.gz) | [TAR.GZ](https://github.com/xiaozhu1337/my-quickstart-go/releases/latest/download/my-quickstart-go-darwin-arm64.tar.gz) |
+| Linux | [TAR.GZ](https://github.com/xiaozhu1337/my-quickstart-go/releases/latest/download/my-quickstart-go-linux-amd64.tar.gz) | [TAR.GZ](https://github.com/xiaozhu1337/my-quickstart-go/releases/latest/download/my-quickstart-go-linux-arm64.tar.gz) |
+
+先解压再运行：Windows 包内为 exe，macOS 包内为 `.app`，Linux 包内为可执行文件；Unix 压缩包保留执行权限。[SHA256SUMS](https://github.com/xiaozhu1337/my-quickstart-go/releases/latest/download/SHA256SUMS) 提供六个压缩包的 SHA-256 校验值。
 
 Windows 双击 exe；macOS 通过 Finder 打开 `.app`；Linux 在桌面会话中运行二进制。Linux 需要 GTK 3，托盘需要 `libayatana-appindicator3`；Wayland 全局热键取决于桌面的 GlobalShortcuts portal。macOS 构建尚未签名或公证，需要按本机的应用安全设置放行。
 
