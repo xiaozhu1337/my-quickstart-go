@@ -100,6 +100,9 @@ func (a *App) appearanceSettings(c *ui.Context) {
 					s.Theme = theme.id
 					if a.window != nil {
 						syncNativeTheme(theme.id)
+						if err := a.window.SetBackgroundColor(backgroundColor(theme.id)); err != nil {
+							a.report(err)
+						}
 					}
 					a.changed()
 				}

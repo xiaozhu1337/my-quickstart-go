@@ -32,8 +32,10 @@ type App struct {
 	search           ui.Handle
 	sidebar          float32
 	icons            map[string]*ui.Bitmap
-	iconLoading      map[string]bool
+	iconLoading      map[string]chan struct{}
 	iconSlots        chan struct{}
+	warming          bool
+	showPending      bool
 	settingsOpen     bool
 	settingsTab      int
 	hotkey           string
@@ -63,7 +65,7 @@ type App struct {
 func New(state model.State, p persistence) *App {
 	state.Normalize()
 	a := &App{state: state, selected: 0, sidebar: float32(state.Settings.SidebarWidth),
-		icons: map[string]*ui.Bitmap{}, iconLoading: map[string]bool{}, iconSlots: make(chan struct{}, 4)}
+		icons: map[string]*ui.Bitmap{}, iconLoading: map[string]chan struct{}{}, iconSlots: make(chan struct{}, 4)}
 	if p != nil {
 		a.saver = newSaver(p)
 	}
@@ -72,12 +74,13 @@ func New(state model.State, p persistence) *App {
 }
 
 func (a *App) Ready() {
+	a.warming = true
 	syncNativeTheme(a.state.Settings.Theme)
 	if err := mygo.App.Dock.SetIcon(branding.PNG); err != nil {
 		a.report(fmt.Errorf("%s: %w", a.text("无法设置应用图标", "Cannot set application icon"), err))
 	}
 	opts := mygo.WindowOptions{Title: "My Quickstart Go", Width: 960, Height: 620, MinWidth: 560, MinHeight: 380,
-		Hidden: true, AlwaysOnTop: a.state.Settings.AlwaysOnTop, Content: ui.View(a.view)}
+		Hidden: true, AlwaysOnTop: a.state.Settings.AlwaysOnTop, BackgroundColor: backgroundColor(a.state.Settings.Theme), Content: ui.View(a.view)}
 	if b := a.state.Settings.WindowBounds; a.state.Settings.RememberWindowBounds && b != nil && b.Width >= 560 && b.Height >= 380 {
 		r := mygo.Rectangle{X: b.X, Y: b.Y, Width: b.Width, Height: b.Height}
 		for _, d := range mygo.Screen.Displays() {
@@ -123,10 +126,16 @@ func (a *App) Ready() {
 	if !a.state.Settings.HideOnStartup || a.tray == nil {
 		a.Show()
 	}
+	a.prepareStartup()
 }
 
 func (a *App) Show() {
+	if a.warming {
+		a.showPending = true
+		return
+	}
 	if a.window != nil {
+		a.prepareWindow()
 		a.window.Show()
 		if a.window.IsMinimized() {
 			a.window.Restore()
@@ -138,6 +147,10 @@ func (a *App) Show() {
 	}
 }
 func (a *App) Toggle() {
+	if a.warming {
+		a.showPending = !a.showPending
+		return
+	}
 	if a.window == nil {
 		return
 	}
@@ -154,6 +167,10 @@ func (a *App) canHide() bool { return a.tray != nil || a.registeredHotkey != "" 
 func (a *App) hide() {
 	if !a.canHide() {
 		a.report(errors.New(a.text("没有可用的托盘或全局快捷键，窗口将保持显示。", "No tray or global hotkey is available; the window will stay visible.")))
+		return
+	}
+	if a.warming {
+		a.showPending = false
 		return
 	}
 	a.captureBounds()
@@ -294,10 +311,11 @@ func (a *App) icon(e model.Entry) *ui.Bitmap {
 	if b, ok := a.icons[key]; ok {
 		return b
 	}
-	if a.iconLoading[key] || a.window == nil {
+	if a.iconLoading[key] != nil || a.window == nil {
 		return nil
 	}
-	a.iconLoading[key] = true
+	done := make(chan struct{})
+	a.iconLoading[key] = done
 	go func() {
 		a.iconSlots <- struct{}{}
 		defer func() { <-a.iconSlots }()
@@ -313,7 +331,11 @@ func (a *App) icon(e model.Entry) *ui.Bitmap {
 		if err != nil {
 			log.Printf("icon %s: %v", e.Path, err)
 		}
-		a.window.Update(func() { a.icons[key] = b; delete(a.iconLoading, key) })
+		a.window.Update(func() {
+			a.icons[key] = b
+			delete(a.iconLoading, key)
+			close(done)
+		})
 	}()
 	return nil
 }
