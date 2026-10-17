@@ -189,7 +189,18 @@ func (a *App) gridView(c *ui.Context) {
 		})
 	}
 	var slots []dragSlot
-	grid := ui.GridView(c, &a.grid, len(a.results), float32(a.state.Settings.CardWidth), float32(a.state.Settings.CardHeight), func(i int) { slots = append(slots, a.card(c, i)) }).Grow(1).Padding(12, 20, 20, 20).Gap(10)
+	// shortcut: GridView has no cell style hook; use a clear theme until MyGo exposes one.
+	theme := c.Theme()
+	gridTheme := *theme
+	gridTheme.Accent, gridTheme.Border = ui.Color{}, ui.Color{}
+	gridTheme.SurfacePressed, gridTheme.SurfaceHover = ui.Color{}, ui.Color{}
+	c.SetTheme(&gridTheme)
+	grid := ui.GridView(c, &a.grid, len(a.results), float32(a.state.Settings.CardWidth), float32(a.state.Settings.CardHeight), func(i int) {
+		c.SetTheme(theme)
+		slots = append(slots, a.card(c, i))
+		c.SetTheme(&gridTheme)
+	}).Grow(1).Padding(12, 20, 20, 20).Gap(10)
+	c.SetTheme(theme)
 	grid.ContextMenu(a.addMenu)
 	if grid.Submitted() && a.selected < len(a.results) {
 		e := a.results[a.selected]
