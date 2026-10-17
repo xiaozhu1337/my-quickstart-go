@@ -188,8 +188,8 @@ func (a *App) hotkeySettings(c *ui.Context) {
 	})
 	a.settingsSection(c, a.text("界面操作", "In-app shortcuts"), "", func() {
 		for _, row := range []struct{ label, key string }{
-			{a.text("搜索所有分类", "Search all groups"), "Ctrl / Cmd + F"},
-			{a.text("清空搜索框", "Clear the search field"), "Esc"},
+			{a.text("显示并聚焦搜索", "Show and focus search"), "Ctrl / Cmd + F"},
+			{a.text("清空并收起搜索", "Clear and hide search"), "Esc"},
 			{a.text("启动选中条目", "Launch selected shortcut"), "Enter / Space"},
 		} {
 			ui.Row(c).Gap(12).Children(func() {

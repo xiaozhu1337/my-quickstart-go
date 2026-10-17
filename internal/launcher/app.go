@@ -22,6 +22,8 @@ type App struct {
 	window           *mygo.Window
 	tray             *mygo.Tray
 	query            string
+	searchOpen       bool
+	matches          map[string]int
 	results          []model.Entry
 	selected         int
 	grid             ui.GridState
@@ -123,7 +125,9 @@ func (a *App) Show() {
 			a.window.Restore()
 		}
 		a.window.Focus()
-		a.search.Focus()
+		if a.searchOpen {
+			a.search.Focus()
+		}
 	}
 }
 func (a *App) Toggle() {

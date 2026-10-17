@@ -8,16 +8,16 @@
 | --- | --- | --- |
 | 分类新增、重命名、删除、选择记忆；保留至少一组 | 保留，初始 Group-1 / reverse / pentest | `internal/launcher/entries.go`、`forms.go` |
 | 当前分类卡片、图标、名称、全文提示 | 原生虚拟网格，图片失败使用名称首字符 | `internal/launcher/view.go`、`app.go` |
-| 跨分类名称搜索；空查询回当前组 | trim、忽略大小写、保留原有顺序 | `internal/launcher/entries.go` |
-| Ctrl/Cmd+F、Esc、键盘启动 | 原生文本输入、网格与按钮键盘行为 | `internal/launcher/view.go` |
+| 跨分类名称搜索；空查询回当前组 | trim、忽略大小写、保留原有顺序；侧栏实时显示各组匹配数，零匹配组变灰 | `internal/launcher/entries.go` |
+| Ctrl/Cmd+F、Esc、键盘启动 | 搜索默认收起，快捷键展开聚焦，Esc 清空并收起；网格与按钮键盘行为 | `internal/launcher/view.go` |
 | 网格、分类、卡片的右键菜单 | MyGo 菜单；打开、所在文件夹、编辑、移除、分类操作 | `internal/launcher/view.go` |
 | 多选文件添加、取消、组首插入、同组路径与参数去重 | 保留；目录可直接拖入，不递归展开 | `internal/launcher/forms.go`、`entries.go` |
 | 外部文件拖入分类、卡片前、网格末尾 | 使用 MyGo 原生文件拖放事件 | `internal/launcher/view.go` |
 | 卡片同组排序、跨分类移动 | 搜索为空时拖动；分类目标组首，空白目标组末 | `internal/launcher/view.go`、`entries.go` |
-| 应用名称、路径、参数、逐行环境变量编辑 | 原生文本输入和多行编辑器；空名/路径保留旧值 | `internal/launcher/forms.go` |
+| 应用名称、路径、参数、逐行环境变量编辑 | 720 DIP 响应式宽弹窗，小窗口滚动表单且保留保存按钮；空名/路径保留旧值 | `internal/launcher/forms.go` |
 | 命令新增与编辑、空名称推导、保留 ID 和添加时间 | Windows 使用 cmd；macOS/Linux 使用 sh | `internal/launcher/forms.go`、`internal/platform` |
 | 单击、Enter/Space 启动；启动成功后保留窗口 | 异步启动并显示失败原因 | `internal/launcher/app.go` |
-| 系统应用列表、名称过滤、添加 | Windows 含 UWP；其他平台使用本机应用枚举 | `internal/platform`、`internal/launcher/forms.go` |
+| 系统应用列表、名称过滤、添加 | Windows 入口为“添加 UWP 应用”，列表保留系统枚举范围；其他平台使用本机应用枚举 | `internal/platform`、`internal/launcher/forms.go` |
 | Windows .lnk 目标、参数、原快捷方式名称 | COM 解析，失败保留 .lnk 本身 | `internal/platform/shortcut_windows.go` |
 | 相对路径 | 以程序目录为基准；仅影响之后的文件导入 | `internal/platform/platform.go` |
 | 文件、目录、URL、打开所在文件夹、图标 | 原生系统接口；保留旧 data URL 图标 | `internal/platform` |
@@ -54,6 +54,7 @@ Windows 保留原始参数引号和反斜杠，修复旧版将反斜杠当作通
 - Windows：`mise exec go@1.27.1 -- go test -race ./...`、`go vet ./...` 通过；覆盖分类/搜索、编辑器、命令、保存快照、保存失败重试、退出保存和普通关闭、无召回入口时的隐藏保护。
 - Windows 实际原生窗口：中文和图标渲染、200% 缩放下的主界面与设置页、即时切换纸白配色及标题栏、退出重启后保留主题通过。X 隐藏并保留进程、托盘恢复、实际选择托盘“退出”后正常结束进程通过。当前布局预览 `windows-preview.png`、`settings-preview.png` 使用 MyGo 测试器与示例数据渲染。
 - 界面精简回归：移除重复标题、操作说明、主区域计数和空闲底栏；560 与 960 宽度下跨分类搜索结果数量、错误提示跨页面显示、清除后收起提示栏、返回后保留查询均通过。
+- 搜索与编辑布局回归：默认隐藏搜索与顶部添加按钮；快捷键显示、聚焦及全选原查询，Esc 收起及恢复当前组，分类匹配数随查询更新，右键添加入口和应用选择框标题一致，960×620 与 560×380 的宽编辑框尺寸及保存通过。
 - 五主题回归：主题合法值归一化、SQLite 保存及重载通过；正文、说明、按钮文字与背景的对比度均不低于 4.5:1。960×620 与 560×380 下依次切换全部主题、设置分组导航、返回主界面、点击开关标签及键盘空格切换通过。
 - MyGo 无窗口测试：实际输入搜索、Esc 清空、按钮新增分类、右键重命名、编辑保存、设置行为开关通过。
 - 平台启动测试：在测试子进程中核对参数及环境变量；Windows .lnk 使用临时快捷方式验证；Linux .desktop 的 Exec、占位符、工作目录和环境变量通过。

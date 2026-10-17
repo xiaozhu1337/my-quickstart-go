@@ -14,14 +14,15 @@ type entryDrag struct{ ID string }
 
 func (a *App) filter() {
 	a.results = a.results[:0]
+	a.matches = make(map[string]int, len(a.state.Groups))
 	q := strings.ToLower(strings.TrimSpace(a.query))
 	for _, g := range a.state.Groups {
-		if q == "" && g.ID != a.state.ActiveGroupID {
-			continue
-		}
 		for _, e := range g.Apps {
 			if q == "" || strings.Contains(strings.ToLower(e.Name), q) {
-				a.results = append(a.results, e)
+				a.matches[g.ID]++
+				if q != "" || g.ID == a.state.ActiveGroupID {
+					a.results = append(a.results, e)
+				}
 			}
 		}
 	}

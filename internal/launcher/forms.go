@@ -2,6 +2,7 @@ package launcher
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -93,25 +94,30 @@ func (a *App) saveEditor() {
 }
 
 func (a *App) editorView(c *ui.Context) {
+	_, height := c.Size()
+	title := a.text("编辑应用", "Edit application")
+	if a.command {
+		title = a.text("命令", "Command")
+	}
 	ui.Modal(c, &a.editorOpen, func() {
-		title := a.text("编辑应用", "Edit application")
-		if a.command {
-			title = a.text("命令", "Command")
-		}
 		ui.Text(c, title).FontSize(20).Bold()
-		ui.Text(c, a.text("名称", "Name"))
-		ui.TextInput(c.Key("entry-name"), &a.draft.Name).Label(a.text("名称", "Name")).AutoFocus()
-		if a.command {
-			ui.Text(c, a.text("命令内容", "Command text"))
-			ui.TextArea(c.Key("entry-command"), &a.draft.Path).Label(a.text("命令内容", "Command text")).Height(130)
-		} else {
-			ui.Text(c, a.text("路径", "Path"))
-			ui.TextInput(c.Key("entry-path"), &a.draft.Path).Label(a.text("路径", "Path"))
-			ui.Text(c, a.text("参数", "Arguments"))
-			ui.TextInput(c.Key("entry-args"), &a.draft.Args).Label(a.text("参数", "Arguments"))
-			ui.Text(c, a.text("环境变量（每行 KEY=value）", "Environment (one KEY=value per line)"))
-			ui.TextArea(c.Key("entry-env"), &a.envText).Label(a.text("环境变量", "Environment")).Height(90)
-		}
+		ui.Scroll(c).Grow(1).FillWidth().Children(func() {
+			ui.Column(c).FillWidth().Gap(10).Children(func() {
+				ui.Text(c, a.text("名称", "Name"))
+				ui.TextInput(c.Key("entry-name"), &a.draft.Name).Label(a.text("名称", "Name")).AutoFocus()
+				if a.command {
+					ui.Text(c, a.text("命令内容", "Command text"))
+					ui.TextArea(c.Key("entry-command"), &a.draft.Path).Label(a.text("命令内容", "Command text")).Height(130)
+				} else {
+					ui.Text(c, a.text("路径", "Path"))
+					ui.TextInput(c.Key("entry-path"), &a.draft.Path).Label(a.text("路径", "Path"))
+					ui.Text(c, a.text("参数", "Arguments"))
+					ui.TextInput(c.Key("entry-args"), &a.draft.Args).Label(a.text("参数", "Arguments"))
+					ui.Text(c, a.text("环境变量（每行 KEY=value）", "Environment (one KEY=value per line)"))
+					ui.TextArea(c.Key("entry-env"), &a.envText).Label(a.text("环境变量", "Environment")).Height(90)
+				}
+			})
+		})
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, a.text("取消", "Cancel")).Clicked() {
 				a.editorOpen = false
@@ -120,7 +126,7 @@ func (a *App) editorView(c *ui.Context) {
 				a.deferAction(a.saveEditor)
 			}
 		})
-	})
+	}).Label(title).Width(720).Height(min(540, height-40))
 }
 
 func (a *App) renameView(c *ui.Context) {
@@ -173,9 +179,16 @@ func (a *App) openSettings() {
 	a.settingsOpen = true
 }
 
+func (a *App) installedAppsTitle() string {
+	if runtime.GOOS == "windows" {
+		return a.text("添加 UWP 应用", "Add UWP application")
+	}
+	return a.text("添加系统应用", "Add installed application")
+}
+
 func (a *App) addAppsView(c *ui.Context) {
 	ui.Modal(c, &a.addOpen, func() {
-		ui.Text(c, a.text("添加系统应用", "Add installed application")).FontSize(20).Bold()
+		ui.Text(c, a.installedAppsTitle()).FontSize(20).Bold()
 		ui.TextInput(c, &a.uwpQuery).Placeholder(a.text("按名称搜索", "Filter by name")).Label(a.text("筛选应用", "Filter applications")).AutoFocus()
 		var entries []model.Entry
 		q := strings.ToLower(strings.TrimSpace(a.uwpQuery))

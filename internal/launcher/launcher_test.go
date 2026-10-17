@@ -88,16 +88,23 @@ func TestNativeViewSearchGroupsAndEditor(t *testing.T) {
 	if !tt.HasText("Alpha App") {
 		t.Fatalf("initial grid is missing: %q", tt.Texts())
 	}
-	if err := tt.Click("Search"); err != nil {
-		t.Fatal(err)
+	if _, visible := tt.Find("Search"); visible || tt.HasText("Add") {
+		t.Fatal("idle view must hide the search and top add button")
+	}
+	tt.Key(ui.Cmd, ui.KeyF)
+	if !tt.Focused("Search") {
+		t.Fatal("the shortcut must show and focus search")
 	}
 	tt.Type("beta")
 	if len(a.results) != 1 || a.results[0].Name != "Beta Tool" {
 		t.Fatalf("search input did not update results: %q", tt.Texts())
 	}
 	tt.Key(0, ui.KeyEscape)
-	if a.query != "" {
-		t.Fatal("Escape did not clear the search")
+	if a.query != "" || a.searchOpen {
+		t.Fatal("Escape must clear and hide search")
+	}
+	if _, visible := tt.Find("Search"); visible {
+		t.Fatal("the search field must be removed after Escape")
 	}
 	if err := tt.Click("New group"); err != nil {
 		t.Fatal(err)
@@ -156,9 +163,7 @@ func TestContextualSearchAndMessages(t *testing.T) {
 		if tt.HasText("Dismiss") {
 			t.Fatal("idle view must not reserve a message bar")
 		}
-		if err := tt.Click("Search"); err != nil {
-			t.Fatal(err)
-		}
+		tt.Key(ui.Cmd, ui.KeyF)
 		tt.Type("beta")
 		if !tt.HasText("Search results (1)") || !tt.HasText("Beta Tool") {
 			t.Fatalf("global search context is missing: %q", tt.Texts())

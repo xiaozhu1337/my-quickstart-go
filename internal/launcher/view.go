@@ -16,34 +16,37 @@ func (a *App) view(c *ui.Context) {
 	t.Font = fontName(a.state.Settings.FontFamily)
 	c.SetTheme(t)
 	c.Root().Background(t.Background)
-	if !a.settingsOpen {
+	if !a.settingsOpen && !a.editorOpen && !a.renameOpen && !a.addOpen {
 		c.OnShortcut(ui.Cmd, ui.KeyF, func() {
-			a.search.Focus()
-			c.Resolve(a.search).SetTextSelection(0, utf8.RuneCountInString(a.query))
+			if a.searchOpen {
+				c.Resolve(a.search).SetTextSelection(0, utf8.RuneCountInString(a.query))
+			}
+			a.searchOpen = true
+			a.search.Focus(c)
+		})
+		c.OnShortcut(0, ui.KeyEscape, func() {
+			a.query = ""
+			a.searchOpen = false
+			a.filter()
 		})
 	}
-	c.OnShortcut(0, ui.KeyEscape, func() {
-		if a.query != "" {
-			a.query = ""
-			a.filter()
-		}
-	})
 	if a.settingsOpen {
 		a.settingsView(c)
 	} else {
 		ui.Column(c).Fill().Children(func() {
-			ui.Row(c).Padding(18, 20).Gap(12).AlignItems(ui.Center).Children(func() {
-				input := ui.TextInput(c.Key("search"), &a.query).Bind(&a.search).Placeholder(a.text("搜索所有分类…", "Search all groups…")).Label(a.text("搜索", "Search")).Grow(1).Height(38)
-				if input.Changed() {
-					a.filter()
-				}
-				if input.Submitted() && a.selected >= 0 && a.selected < len(a.results) {
-					e := a.results[a.selected]
-					a.deferAction(func() { a.launch(e) })
-				}
-				ui.PrimaryButton(c, a.text("添加", "Add")).Height(38).Menu(func(m *ui.Menu) { a.addMenu(m) })
-			})
-			ui.Divider(c)
+			if a.searchOpen {
+				ui.Row(c).Padding(18, 20).Children(func() {
+					input := ui.TextInput(c.Key("search"), &a.query).Bind(&a.search).Placeholder(a.text("搜索所有分类…", "Search all groups…")).Label(a.text("搜索", "Search")).Grow(1).Height(38)
+					if input.Changed() {
+						a.filter()
+					}
+					if input.Submitted() && a.selected >= 0 && a.selected < len(a.results) {
+						e := a.results[a.selected]
+						a.deferAction(func() { a.launch(e) })
+					}
+				})
+				ui.Divider(c)
+			}
 			if ui.Split(c, &a.sidebar, func() { a.sidebarView(c) }, func() {
 				ui.Column(c).Fill().Children(func() {
 					if strings.TrimSpace(a.query) != "" {
@@ -108,19 +111,29 @@ func (a *App) sidebarView(c *ui.Context) {
 			g := a.state.Groups[i]
 			row := ui.ButtonBase(c.Key(g.ID)).Label(g.Name).Tooltip(g.Name).WidthPercent(100).Height(40).Padding(10).Radius(8)
 			active := g.ID == a.state.ActiveGroupID
+			noMatches := strings.TrimSpace(a.query) != "" && a.matches[g.ID] == 0
+			accent := c.Theme().Accent
+			if noMatches {
+				gray := uint8(96)
+				if c.Theme().Dark {
+					gray = 144
+				}
+				accent = ui.RGB(gray, gray, gray)
+			}
 			if active {
-				row.Background(c.Theme().Accent.Alpha(0.14)).Border(1, c.Theme().Accent.Alpha(0.25))
+				row.Background(accent.Alpha(0.14)).Border(1, accent.Alpha(0.25))
 			} else if row.Hovered() {
 				row.Background(c.Theme().SurfaceHover)
 			}
 			row.Children(func() {
 				ui.Row(c).Fill().Gap(6).Children(func() {
-					color := c.Theme().TextMuted
-					if active {
-						color = c.Theme().Text
+					color := c.Theme().Text
+					countColor := c.Theme().TextMuted
+					if noMatches {
+						color, countColor = accent, accent
 					}
 					ui.Text(c, g.Name).SingleLine().TextColor(color).Grow(1)
-					ui.Text(c, fmt.Sprint(len(g.Apps))).FontSize(10).TextColor(c.Theme().TextMuted)
+					ui.Text(c, fmt.Sprint(a.matches[g.ID])).FontSize(10).TextColor(countColor)
 				})
 			})
 			if row.Clicked() {
@@ -169,7 +182,7 @@ func (a *App) gridView(c *ui.Context) {
 	a.grid.Selected = &a.selected
 	if len(a.results) == 0 {
 		ui.Column(c).AlignItems(ui.Center).Gap(8).Padding(30, 16).Children(func() {
-			title, hint := a.text("从一个快捷方式开始", "Your shortcuts belong here"), a.text("点击“添加”或将文件拖入下方区域。", "Use Add or drop files into the space below.")
+			title, hint := a.text("从一个快捷方式开始", "Your shortcuts belong here"), a.text("右键空白处添加，或将文件拖入下方区域。", "Right-click the empty space to add, or drop files below.")
 			if strings.TrimSpace(a.query) != "" {
 				title, hint = a.text("没有找到匹配的条目", "No matching shortcuts"), a.text("试试其他名称，或清空搜索查看分类。", "Try another name or clear the search to browse groups.")
 			}
@@ -266,7 +279,7 @@ func (a *App) addMenu(m *ui.Menu) {
 	if m.Item(a.text("添加命令", "Add command")).Chosen() {
 		a.newCommand()
 	}
-	if m.Item(a.text("添加系统应用", "Add installed application")).Chosen() {
+	if m.Item(a.installedAppsTitle()).Chosen() {
 		a.openAddApps()
 	}
 }
