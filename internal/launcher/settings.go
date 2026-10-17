@@ -1,8 +1,6 @@
 package launcher
 
 import (
-	"fmt"
-
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
@@ -62,7 +60,6 @@ func (a *App) settingsView(c *ui.Context) {
 				})
 			})
 		})
-		ui.Divider(c)
 		a.statusView(c)
 	})
 }
@@ -258,18 +255,14 @@ func (a *App) settingNumber(c *ui.Context, label string, value *float64, min, ma
 }
 
 func (a *App) statusView(c *ui.Context) {
+	if a.message == "" {
+		return
+	}
+	ui.Divider(c)
 	ui.Row(c).Padding(8, 20).Gap(12).Children(func() {
-		msg := a.message
-		if msg == "" {
-			msg = fmt.Sprintf(a.text("%d 个分类 · %d 个条目", "%d groups · %d items"), len(a.state.Groups), len(a.results))
-		}
-		ui.Text(c, msg).FontSize(11).TextColor(c.Theme().TextMuted).Grow(1).SingleLine().Tooltip(msg)
-		if a.message != "" && ui.Button(c, a.text("清除提示", "Dismiss")).Clicked() {
+		ui.Text(c, a.message).FontSize(11).TextColor(c.Theme().TextMuted).Grow(1).SingleLine().Tooltip(a.message)
+		if ui.Button(c, a.text("清除提示", "Dismiss")).Clicked() {
 			a.message = ""
-		}
-		ui.Text(c, a.themeName()).FontSize(11).TextColor(c.Theme().TextMuted)
-		if a.registeredHotkey != "" {
-			ui.Text(c, a.registeredHotkey).FontSize(11).TextColor(c.Theme().TextMuted)
 		}
 	})
 }

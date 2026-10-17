@@ -33,7 +33,6 @@ func (a *App) view(c *ui.Context) {
 	} else {
 		ui.Column(c).Fill().Children(func() {
 			ui.Row(c).Padding(18, 20).Gap(12).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, a.text("快速启动", "Quickstart")).FontSize(20).Bold().Margin(0, 12, 0, 0)
 				input := ui.TextInput(c.Key("search"), &a.query).Bind(&a.search).Placeholder(a.text("搜索所有分类…", "Search all groups…")).Label(a.text("搜索", "Search")).Grow(1).Height(38)
 				if input.Changed() {
 					a.filter()
@@ -47,24 +46,15 @@ func (a *App) view(c *ui.Context) {
 			ui.Divider(c)
 			if ui.Split(c, &a.sidebar, func() { a.sidebarView(c) }, func() {
 				ui.Column(c).Fill().Children(func() {
-					title := a.text("搜索结果", "Search results")
-					if a.query == "" {
-						if g := a.state.Group(a.state.ActiveGroupID); g != nil {
-							title = g.Name
-						}
+					if strings.TrimSpace(a.query) != "" {
+						ui.Text(c, fmt.Sprintf(a.text("搜索结果（%d）", "Search results (%d)"), len(a.results))).FontSize(11).TextColor(t.TextMuted).Padding(12, 20, 0, 20)
 					}
-					ui.Row(c).Padding(18, 20, 4, 20).Gap(10).Children(func() {
-						ui.Text(c, title).FontSize(22).Bold().SingleLine().Grow(1)
-						ui.Text(c, fmt.Sprintf(a.text("%d 个条目", "%d items"), len(a.results))).FontSize(11).TextColor(t.TextMuted)
-					})
-					ui.Text(c, a.text("点击启动 · 右键管理 · 拖动排序", "Click to launch · Right click to manage · Drag to arrange")).FontSize(11).TextColor(t.TextMuted).Padding(0, 20, 8, 20)
 					a.gridView(c)
 				})
 			}).Grow(1).Changed() {
 				a.state.Settings.SidebarWidth = float64(a.sidebar)
 				a.changed()
 			}
-			ui.Divider(c)
 			a.statusView(c)
 		})
 	}
@@ -113,7 +103,6 @@ func (a *App) sidebarView(c *ui.Context) {
 		}
 	})
 	side.Children(func() {
-		ui.Text(c, a.text("我的分类", "LIBRARY")).FontSize(10).Bold().TextColor(c.Theme().TextMuted).Padding(10, 6)
 		a.groups.Key = func(i int) any { return a.state.Groups[i].ID }
 		ui.List(c, &a.groups, len(a.state.Groups), func(i int) {
 			g := a.state.Groups[i]

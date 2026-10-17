@@ -148,3 +148,43 @@ func TestNativeViewSearchGroupsAndEditor(t *testing.T) {
 		t.Fatal("behavior checkbox did not save")
 	}
 }
+
+func TestContextualSearchAndMessages(t *testing.T) {
+	for _, width := range []int{560, 960} {
+		a := fixture()
+		tt := ui.NewTester(a.view, width, 380)
+		if tt.HasText("Dismiss") {
+			t.Fatal("idle view must not reserve a message bar")
+		}
+		if err := tt.Click("Search"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Type("beta")
+		if !tt.HasText("Search results (1)") || !tt.HasText("Beta Tool") {
+			t.Fatalf("global search context is missing: %q", tt.Texts())
+		}
+		a.message = "Hotkey unavailable"
+		tt.Frame()
+		if !tt.HasText(a.message) {
+			t.Fatal("errors must remain visible")
+		}
+		if err := tt.Click("Settings"); err != nil {
+			t.Fatal(err)
+		}
+		if !tt.HasText(a.message) {
+			t.Fatal("settings must preserve the error message")
+		}
+		if err := tt.Click("Dismiss"); err != nil {
+			t.Fatal(err)
+		}
+		if a.message != "" || tt.HasText("Dismiss") {
+			t.Fatal("dismissing a message must remove the bar")
+		}
+		if err := tt.Click("Close"); err != nil {
+			t.Fatal(err)
+		}
+		if !tt.HasText("Beta Tool") || a.query != "beta" {
+			t.Fatal("returning to the launcher must preserve search")
+		}
+	}
+}

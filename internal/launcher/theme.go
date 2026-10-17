@@ -54,12 +54,3 @@ func syncNativeTheme(id string) {
 		mygo.Theme.SetSource(source)
 	}
 }
-
-func (a *App) themeName() string {
-	for _, theme := range themes {
-		if theme.id == a.state.Settings.Theme {
-			return a.text(theme.zh, theme.en)
-		}
-	}
-	return a.text(themes[0].zh, themes[0].en)
-}
