@@ -77,6 +77,8 @@ The global hotkey is empty by default. Set a shortcut such as `Ctrl+Alt+Space` i
 
 Hidden startup controls the launcher's initial visibility. To start it at login on Windows, create or update a shortcut in your Windows Startup folder.
 
+Startup preloads the initial screen's icons (up to 128 cards, with a 500 ms wait limit) and prepares content before revealing the window. On Windows, the hidden native surface also draws its first GPU frame without showing or activating the window; shell icons are extracted on background COM threads. Later reveals prepare the current frame before showing it. macOS/Linux warm content layout and text; their desktop backends still initialize GPU presentation when the window is mapped. Very slow or unavailable targets retain their placeholder while icon loading continues.
+
 ## Data and legacy migration
 
 | Platform | Default database |

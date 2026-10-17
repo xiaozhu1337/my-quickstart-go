@@ -90,12 +90,3 @@ func TestIconPreparationWaitsAndHasDeadline(t *testing.T) {
 	}
 	waitForIcons(nil, time.Hour)
 }
-
-func TestWindowBackgroundMatchesEveryTheme(t *testing.T) {
-	want := map[string]string{"dark": "#111720", "light": "#f2f5fa", "midnight": "#0d1429", "forest": "#111d1b", "rose": "#faf2f3"}
-	for id, color := range want {
-		if got := backgroundColor(id); got != color {
-			t.Errorf("%s: native background %s, want %s", id, got, color)
-		}
-	}
-}

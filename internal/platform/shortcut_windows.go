@@ -19,6 +19,9 @@ var (
 
 type comInterface struct{ vtable *[32]uintptr }
 
+// Native output pointers must survive stack growth while syscall arguments are built.
+//
+//go:uintptrescapes
 func comCall(object *comInterface, slot int, args ...uintptr) uintptr {
 	result, _, _ := syscall.SyscallN(object.vtable[slot], append([]uintptr{uintptr(unsafe.Pointer(object))}, args...)...)
 	runtime.KeepAlive(object)
