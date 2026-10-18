@@ -223,7 +223,7 @@ func (a *App) card(c *ui.Context, i int) dragSlot {
 	var card ui.Element
 	slot.Children(func() {
 		card = ui.ButtonBase(c.Key(e.ID)).Label(e.Name).Tooltip(e.Name).Size(float32(a.state.Settings.CardWidth), float32(a.state.Settings.CardHeight)).Radius(10).Padding(6).Background(c.Theme().Surface).Border(1, c.Theme().Border.Alpha(0.6))
-		if i == a.selected {
+		if i == a.selected && c.Resolve(a.grid.Handle).FocusVisible() {
 			card.Border(1, c.Theme().Accent.Alpha(0.65))
 		}
 		if strings.TrimSpace(a.query) == "" {
