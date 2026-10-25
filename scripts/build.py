@@ -22,7 +22,7 @@ def build(target_os: str, arch: str) -> Path:
     env = os.environ.copy()
     env.update(GOOS=target_os, GOARCH=arch, CGO_ENABLED="0")
     flags = "-s -w" + (" -H=windowsgui" if target_os == "windows" else "")
-    subprocess.run(["mise", "exec", "go@1.27.1", "--", "go", "build", "-trimpath", "-ldflags", flags,
+    subprocess.run(["mise", "exec", "go@1.27.3", "--", "go", "build", "-trimpath", "-ldflags", flags,
                     "-o", str(binary), "./cmd/quickstart"], cwd=ROOT, env=env, check=True, stdin=subprocess.DEVNULL)
     if target_os == "darwin":
         info = {"CFBundleName": "My Quickstart Go", "CFBundleDisplayName": "My Quickstart Go",

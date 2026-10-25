@@ -37,11 +37,11 @@ Extract the package before running it. Windows packages contain an `.exe`; macOS
 
 ## Build and run
 
-The Go toolchain is managed with [mise](https://mise.jdx.dev/) and pinned to **Go 1.27.1**. Go dependencies are pinned in `go.mod` and `go.sum`. The build script uses only the Python standard library.
+The Go toolchain is managed with [mise](https://mise.jdx.dev/) and pinned to **Go 1.27.3**. Go dependencies are pinned in `go.mod` and `go.sum`. The build script uses only the Python standard library.
 
 ```sh
-mise install go@1.27.1
-mise exec go@1.27.1 -- go run ./cmd/quickstart
+mise install go@1.27.3
+mise exec go@1.27.3 -- go run ./cmd/quickstart
 ```
 
 Build for your target platform:
@@ -102,9 +102,9 @@ Entries and settings remain in local SQLite, including environment variable valu
 UI tests use [MyGo `ui.NewTester`](https://mygo.egoist.dev/docs/ui/testing) to simulate input, clicks, dragging, scrolling, keyboard navigation, and layout **without opening a window**. Drag tests cover 100% and 200% scale.
 
 ```sh
-mise exec go@1.27.1 -- go test ./...
-mise exec go@1.27.1 -- go test -race ./...
-mise exec go@1.27.1 -- go vet ./...
+mise exec go@1.27.3 -- go test ./...
+mise exec go@1.27.3 -- go test -race ./...
+mise exec go@1.27.3 -- go vet ./...
 ```
 
 Windows tests, race checks, and static checks pass. Headless UI and backend tests have also run on Linux through WSL. All six Windows/macOS/Linux architecture combinations build successfully; Windows icon resources and macOS bundle metadata have been checked. Real macOS and Linux desktop interactions remain unverified; see the [validation record](docs/FEATURES.md) for details.

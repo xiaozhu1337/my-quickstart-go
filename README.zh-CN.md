@@ -60,16 +60,16 @@ Windows 双击 exe；macOS 通过 Finder 打开 `.app`；Linux 在桌面会话�
 
 ## 开发与构建
 
-Go 工具链通过 [mise](https://mise.jdx.dev/) 管理，版本固定为 1.27.1；MyGo 和 SQLite 依赖由 `go.mod` / `go.sum` 锁定。构建脚本仅使用 Python 标准库。
+Go 工具链通过 [mise](https://mise.jdx.dev/) 管理，版本固定为 1.27.3；MyGo 和 SQLite 依赖由 `go.mod` / `go.sum` 锁定。构建脚本仅使用 Python 标准库。
 
 界面回归使用 [MyGo `ui.NewTester`](https://mygo.egoist.dev/docs/ui/testing)，不打开窗口，在内存中模拟输入、点击、拖动、滚动、键盘与布局；拖拽测试覆盖 100% / 200% 缩放。运行下面的 `go test` 不会弹出应用窗口。
 
 ```sh
-mise install go@1.27.1
-mise exec go@1.27.1 -- go run ./cmd/quickstart
-mise exec go@1.27.1 -- go test ./...
-mise exec go@1.27.1 -- go test -race ./...
-mise exec go@1.27.1 -- go vet ./...
+mise install go@1.27.3
+mise exec go@1.27.3 -- go run ./cmd/quickstart
+mise exec go@1.27.3 -- go test ./...
+mise exec go@1.27.3 -- go test -race ./...
+mise exec go@1.27.3 -- go vet ./...
 ```
 
 ```sh
