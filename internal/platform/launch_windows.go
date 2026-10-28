@@ -108,17 +108,18 @@ func OpenFolder(path string) error {
 		return errors.New("path has no folder")
 	}
 	path = absolutePath(path)
+	explorer := filepath.Join(os.Getenv("SystemRoot"), "explorer.exe")
 	info, err := os.Stat(path)
 	if err == nil && info.IsDir() {
-		return start(exec.Command(systemProgram("explorer.exe"), path))
+		return start(exec.Command(explorer, path))
 	}
 	if err == nil {
-		return start(exec.Command(systemProgram("explorer.exe"), "/select,", path))
+		return start(exec.Command(explorer, "/select,", path))
 	}
 	if !os.IsNotExist(err) {
 		return err
 	}
-	return start(exec.Command(systemProgram("explorer.exe"), filepath.Dir(path)))
+	return start(exec.Command(explorer, filepath.Dir(path)))
 }
 
 // InstalledApps requires a running MyGo application and mirrors the old Get-StartApps picker.
