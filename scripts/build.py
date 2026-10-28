@@ -4,11 +4,14 @@ import os
 from pathlib import Path
 import plistlib
 import platform
+import re
 import shutil
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+VERSION = re.search(r'^const Version = "([^"]+)"$',
+                    (ROOT / "internal" / "buildinfo" / "info.go").read_text(encoding="utf-8"), re.MULTILINE).group(1)
 
 
 def build(target_os: str, arch: str) -> Path:
@@ -23,11 +26,12 @@ def build(target_os: str, arch: str) -> Path:
     env.update(GOOS=target_os, GOARCH=arch, CGO_ENABLED="0")
     flags = "-s -w" + (" -H=windowsgui" if target_os == "windows" else "")
     subprocess.run(["mise", "exec", "go@1.27.3", "--", "go", "build", "-trimpath", "-ldflags", flags,
-                    "-o", str(binary), "./cmd/quickstart"], cwd=ROOT, env=env, check=True, stdin=subprocess.DEVNULL)
+                    "-o", str(binary), "./cmd/quickstart"], cwd=ROOT, env=env, check=True, stdin=subprocess.DEVNULL,
+                   creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
     if target_os == "darwin":
         info = {"CFBundleName": "My Quickstart Go", "CFBundleDisplayName": "My Quickstart Go",
                 "CFBundleIdentifier": "com.cat.my-quickstart-go", "CFBundleExecutable": binary.name,
-                "CFBundlePackageType": "APPL", "CFBundleVersion": "2", "CFBundleShortVersionString": "1.0.1",
+                "CFBundlePackageType": "APPL", "CFBundleVersion": "2", "CFBundleShortVersionString": VERSION,
                 "CFBundleIconFile": "icon.icns", "NSHighResolutionCapable": True}
         resources = bundle / "Contents" / "Resources"
         resources.mkdir(parents=True, exist_ok=True)

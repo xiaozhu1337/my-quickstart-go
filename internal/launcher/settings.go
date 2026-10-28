@@ -7,12 +7,13 @@ import (
 
 func (a *App) settingsView(c *ui.Context) {
 	width, _ := c.Size()
-	labels := []string{a.text("外观", "Appearance"), a.text("布局", "Layout"), a.text("行为", "Behavior"), a.text("快捷键", "Hotkey")}
+	labels := []string{a.text("外观", "Appearance"), a.text("布局", "Layout"), a.text("行为", "Behavior"), a.text("快捷键", "Hotkey"), a.text("关于", "About")}
 	descriptions := []string{
 		a.text("让启动器更符合你的使用习惯。", "Make your launcher feel at home."),
 		a.text("调整应用卡片和分类栏的显示密度。", "Find the right density for your shortcuts."),
 		a.text("选择窗口、启动和文件路径的工作方式。", "Choose how the window and file paths behave."),
 		a.text("随时唤起启动器，保持键盘操作流畅。", "Keep your launcher one keystroke away."),
+		a.text("查看程序和依赖库的版本信息。", "View application and dependency versions."),
 	}
 	ui.Column(c).Fill().Children(func() {
 		ui.Row(c).Padding(18, 20).Gap(16).Children(func() {
@@ -56,6 +57,8 @@ func (a *App) settingsView(c *ui.Context) {
 						a.behaviorSettings(c)
 					case 3:
 						a.hotkeySettings(c)
+					case 4:
+						a.aboutSettings(c)
 					}
 				})
 			})

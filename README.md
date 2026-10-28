@@ -17,7 +17,7 @@ A native desktop launcher for **Windows, macOS, and Linux**, built in Go with [M
 
 Right-click empty space in the card grid to add entries. Right-click empty space in the sidebar to add a group, or right-click a group to rename or remove it. The bottom-left corner contains only Settings.
 
-Settings has four sections: **Appearance, Layout, Behavior, and Hotkey**. Wide windows use a sidebar; narrow windows use tabs. Changes save automatically, except the global hotkey, which needs **Apply** to validate registration. The entry editor adapts to smaller windows while keeping its save button visible.
+Settings has five sections: **Appearance, Layout, Behavior, Hotkey, and About**. About shows the application version, Go version, platform, and the dependency versions embedded in the executable. Wide windows use a sidebar; narrow windows use tabs. Changes save automatically, except the global hotkey, which needs **Apply** to validate registration. The entry editor adapts to smaller windows while keeping its save button visible.
 
 ![Settings](docs/settings-preview.png)
 
