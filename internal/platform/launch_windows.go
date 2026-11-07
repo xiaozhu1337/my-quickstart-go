@@ -8,8 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
+	"unicode/utf16"
 	"unsafe"
 
 	"github.com/egoist/mygo"
@@ -56,6 +58,43 @@ func commandProcess(command string) *exec.Cmd {
 	return cmd
 }
 
+// startConsole lets Windows initialize real console handles. exec.Cmd instead
+// supplies NUL handles when its standard streams are unset, leaving a blank window.
+func startConsole(cmd *exec.Cmd) error {
+	program, err := syscall.UTF16PtrFromString(cmd.Path)
+	if err != nil {
+		return err
+	}
+	line, err := syscall.UTF16PtrFromString(cmd.SysProcAttr.CmdLine)
+	if err != nil {
+		return err
+	}
+	var directory *uint16
+	if cmd.Dir != "" {
+		directory, err = syscall.UTF16PtrFromString(cmd.Dir)
+		if err != nil {
+			return err
+		}
+	}
+	var environment *uint16
+	if cmd.Env != nil {
+		env := append([]string(nil), cmd.Env...)
+		sort.Slice(env, func(i, j int) bool { return strings.ToUpper(env[i]) < strings.ToUpper(env[j]) })
+		block := utf16.Encode([]rune(strings.Join(env, "\x00") + "\x00\x00"))
+		environment = &block[0]
+	}
+	si := syscall.StartupInfo{Cb: uint32(unsafe.Sizeof(syscall.StartupInfo{}))}
+	var pi syscall.ProcessInformation
+	const createNewConsole = 0x00000010
+	const createUnicodeEnvironment = 0x00000400
+	if err := syscall.CreateProcess(program, line, nil, nil, false, createNewConsole|createUnicodeEnvironment, environment, directory, &si, &pi); err != nil {
+		return fmt.Errorf("start console: %w", err)
+	}
+	syscall.CloseHandle(pi.Thread)
+	syscall.CloseHandle(pi.Process)
+	return nil
+}
+
 func Launch(entry model.Entry) error {
 	path := cleanInput(entry.Path)
 	if path == "" || strings.ContainsRune(path, 0) || strings.ContainsRune(entry.Args, 0) {
@@ -99,6 +138,9 @@ func Launch(entry model.Entry) error {
 		}
 	}
 	cmd.Env = env
+	if ext == ".bat" || ext == ".cmd" {
+		return startConsole(cmd)
+	}
 	return start(cmd)
 }
 
