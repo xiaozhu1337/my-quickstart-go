@@ -40,8 +40,17 @@ func (p *Panel) dialogs(c *ui.Context) {
 		})
 	}).Label("MCP").Width(760).Height(min(650, height-32))
 	ui.Modal(c, &p.skillOpen, func() {
-		ui.Text(c, p.tr("导入 Skill", "Import skill")).FontSize(20).Bold()
-		ui.Text(c, p.tr("选择包含 SKILL.md 的目录；整个目录会复制并统一保存到资源库。", "Choose a directory containing SKILL.md; its contents are copied into the library."))
+		title, submit := p.tr("导入 Skill", "Import skill"), p.tr("导入并保存", "Import and save")
+		if p.skillID != "" {
+			title, submit = p.tr("编辑 Skill：", "Edit skill: ")+p.skillName, p.tr("更新并保存", "Update and save")
+		}
+		ui.Text(c, title).FontSize(20).Bold()
+		if p.skillID != "" {
+			ui.Text(c, p.tr("输入包含 SKILL.md 的目录路径，用该目录完整替换已保存的文件；保留当前名称与置顶状态。", "Enter a directory containing SKILL.md to replace the saved files, keeping the current name and pin state."))
+			ui.Text(c, p.tr("更新后需重新复制到项目，才会更新项目内的 Skill。", "Copy again after updating to refresh the skill in each project.")).FontSize(11).TextColor(c.Theme().TextMuted)
+		} else {
+			ui.Text(c, p.tr("选择包含 SKILL.md 的目录；整个目录会复制并统一保存到资源库。", "Choose a directory containing SKILL.md; its contents are copied into the library."))
+		}
 		ui.Row(c).Gap(8).Children(func() {
 			ui.TextInput(c.Key("skill-source"), &p.source).Label(p.tr("Skill 目录", "Skill directory")).Grow(1).Disabled(p.Busy)
 			if ui.Button(c, p.tr("选择目录", "Choose directory")).Disabled(p.Busy).Clicked() {
@@ -53,10 +62,18 @@ func (p *Panel) dialogs(c *ui.Context) {
 			if ui.Button(c, p.tr("取消", "Cancel")).Disabled(p.Busy).Clicked() {
 				p.skillOpen = false
 			}
-			if ui.PrimaryButton(c, p.tr("导入并保存", "Import and save")).Disabled(p.Busy || strings.TrimSpace(p.source) == "").Clicked() {
-				source := p.source
+			if ui.PrimaryButton(c, submit).Disabled(p.Busy || strings.TrimSpace(p.source) == "").Clicked() {
+				id, source := p.skillID, p.source
 				message := p.tr("Skill 已保存", "Skill saved")
-				p.run(func() (string, error) { return message, p.store.ImportSkill(source) }, true)
+				if id != "" {
+					message = p.tr("Skill 已更新", "Skill updated")
+				}
+				p.run(func() (string, error) {
+					if id != "" {
+						return message, p.store.UpdateSkill(id, source)
+					}
+					return message, p.store.ImportSkill(source)
+				}, true)
 			}
 		})
 	}).Label("Skill").Width(680)

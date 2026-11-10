@@ -176,6 +176,7 @@ func TestLibraryPreview(t *testing.T) {
 			open func()
 		}{
 			{"mcp-editor.png", func() { p.edit(library.Item{}) }},
+			{"skill-editor.png", func() { p.editOpen = false; p.edit(p.items[3]) }},
 		} {
 			item.open()
 			tt.Frame()

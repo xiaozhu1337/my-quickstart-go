@@ -37,7 +37,7 @@ Use the waveform icon on an MCP row to **Check availability**. The check connect
 
 ![MCP availability check with sample data](docs/mcp-check-preview.png)
 
-MCP rows have an **Edit** button; Skill rows have **Open folder**, which opens the imported library directory in Windows Explorer. You can edit `SKILL.md` and supporting files there; copy the resource to each project again to update its independent files. The list's saved name and description are library metadata. MCP configuration comments include concrete `args`, `env`, `cwd`, and HTTP `headers` examples, including on existing entries.
+MCP and Skill rows have an **Edit** button. For a Skill, enter or browse to a directory containing `SKILL.md`, then choose **Update and save** to replace the saved files, remove obsolete assets and refresh the description while preserving its name and pin state. Invalid sources or failed writes preserve the previous files. **Open folder** opens the saved Skill directory in Windows Explorer for direct editing. Copy the resource to each project again to update its independent files. The list's saved name and description are library metadata. MCP configuration comments include concrete `args`, `env`, `cwd`, and HTTP `headers` examples, including on existing entries.
 
 Use **Pin** / **Unpin** on either resource type to keep it at the top. Pin state persists across restarts and MCP edits; multiple pinned resources retain their original relative order. Unpinning restores the resource's place among unpinned entries. Row action buttons do not change selection, and hover/selection highlights keep row sizes fixed.
 

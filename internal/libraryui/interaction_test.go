@@ -93,8 +93,8 @@ func TestSkillOpensLibraryDirectoryWithoutChangingSelection(t *testing.T) {
 	if opened != want || opened == source || len(p.ids()) != 1 || p.editOpen || p.failure != "" {
 		t.Fatal("opening folder changed selection or opened the wrong folder", opened, p.failure)
 	}
-	if tt.HasText("编辑") {
-		t.Fatal("skill must not show an editor button")
+	if !tt.HasText("编辑") {
+		t.Fatal("skill editor button missing")
 	}
 	p.openFolder = func(string) error { return errors.New("Explorer failed") }
 	click(t, tt, "打开目录")

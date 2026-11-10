@@ -18,54 +18,55 @@ func (l *Library) ImportSkill(source string) error {
 	return l.importSkill(source, "", "")
 }
 
-func (l *Library) importSkill(source, name, note string) error {
+func skillSource(source string) (string, error) {
+	if strings.TrimSpace(source) == "" {
+		return "", errors.New("请选择包含 SKILL.md 的目录")
+	}
 	source, err := filepath.Abs(strings.TrimSpace(source))
 	if err != nil {
-		return err
+		return "", err
 	}
 	info, err := os.Stat(source)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !info.IsDir() {
 		source = filepath.Dir(source)
 	}
-	source, err = filepath.EvalSymlinks(source)
-	if err != nil {
-		return err
-	}
-	b, err := os.ReadFile(filepath.Join(source, "SKILL.md"))
-	if err != nil {
-		return fmt.Errorf("请选择包含 SKILL.md 的目录: %w", err)
-	}
+	return filepath.EvalSymlinks(source)
+}
+
+type skillMetadata struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+}
+
+func skillDocument(b []byte, name, note string) (skillMetadata, []byte, error) {
+	var meta skillMetadata
 	text := strings.ReplaceAll(string(b), "\r\n", "\n")
 	if !strings.HasPrefix(text, "---\n") {
-		return errors.New("SKILL.md 缺少 YAML frontmatter")
+		return meta, nil, errors.New("SKILL.md 缺少 YAML frontmatter")
 	}
 	end := strings.Index(text[4:], "\n---")
 	if end < 0 {
-		return errors.New("SKILL.md frontmatter 未闭合")
+		return meta, nil, errors.New("SKILL.md frontmatter 未闭合")
 	}
-	var meta struct {
-		Name        string `yaml:"name"`
-		Description string `yaml:"description"`
-	}
-	if err = yaml.Unmarshal([]byte(text[4:4+end]), &meta); err != nil {
-		return err
+	if err := yaml.Unmarshal([]byte(text[4:4+end]), &meta); err != nil {
+		return meta, nil, err
 	}
 	if strings.TrimSpace(meta.Description) == "" {
-		return errors.New("SKILL.md 须包含有效的 description")
+		return meta, nil, errors.New("SKILL.md 须包含有效的 description")
 	}
-	if name != "" {
-		// Magpie can keep a skill under a different library name.
+	if name != "" && name != meta.Name {
+		// Updates and Magpie imports retain the resource's library name.
 		var front map[string]any
-		if err = yaml.Unmarshal([]byte(text[4:4+end]), &front); err != nil {
-			return err
+		if err := yaml.Unmarshal([]byte(text[4:4+end]), &front); err != nil {
+			return meta, nil, err
 		}
 		front["name"] = name
 		raw, e := yaml.Marshal(front)
 		if e != nil {
-			return e
+			return meta, nil, e
 		}
 		b = []byte("---\n" + string(raw) + text[4+end+1:])
 		meta.Name = name
@@ -74,7 +75,23 @@ func (l *Library) importSkill(source, name, note string) error {
 		meta.Description = strings.TrimSpace(meta.Description + "\n" + note)
 	}
 	if !safeName.MatchString(meta.Name) || strings.TrimSpace(meta.Description) == "" {
-		return errors.New("SKILL.md 须包含有效的 name 和 description")
+		return meta, nil, errors.New("SKILL.md 须包含有效的 name 和 description")
+	}
+	return meta, b, nil
+}
+
+func (l *Library) importSkill(source, name, note string) error {
+	source, err := skillSource(source)
+	if err != nil {
+		return err
+	}
+	b, err := os.ReadFile(filepath.Join(source, "SKILL.md"))
+	if err != nil {
+		return fmt.Errorf("请选择包含 SKILL.md 的目录: %w", err)
+	}
+	meta, b, err := skillDocument(b, name, note)
+	if err != nil {
+		return err
 	}
 	items, err := l.read()
 	if err != nil {

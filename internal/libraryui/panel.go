@@ -28,6 +28,7 @@ type Panel struct {
 	resetMCP                                  bool
 	openFolder                                func(string) error
 	editID, name, description, config, source string
+	skillID, skillName                        string
 	magpieSource                              string
 	importReport                              *library.ImportReport
 	importPage                                int
@@ -111,6 +112,12 @@ func (p *Panel) ids() []string {
 }
 
 func (p *Panel) edit(i library.Item) {
+	if i.Kind == "skill" {
+		p.skillID, p.skillName = i.ID, i.Name
+		p.source, p.failure = "", ""
+		p.skillOpen = true
+		return
+	}
 	p.editID, p.name, p.description = i.ID, i.Name, i.Description
 	p.config = mcpExample
 	if i.MCP != nil {
@@ -167,6 +174,7 @@ func (p *Panel) View(c *ui.Context) {
 				p.edit(library.Item{})
 			}
 			if ui.Button(c, p.tr("添加 Skill", "Add Skill")).Disabled(p.Busy || p.store == nil).Clicked() {
+				p.skillID, p.skillName = "", ""
 				p.source = ""
 				p.failure = ""
 				p.skillOpen = true
@@ -289,7 +297,8 @@ func (p *Panel) resourceList(c *ui.Context) {
 						return "", p.openFolder(path)
 					}, false)
 				}
-			} else if actionButton(c, p.tr("编辑", "Edit"), editIcon, false, p.Busy).Clicked() {
+			}
+			if actionButton(c, p.tr("编辑", "Edit"), editIcon, false, p.Busy).Clicked() {
 				p.edit(i)
 			}
 		})
