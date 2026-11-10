@@ -153,17 +153,6 @@ func (p *Panel) pick(skill bool) {
 func (p *Panel) View(c *ui.Context) {
 	ui.Column(c).Grow(1).FillWidth().Padding(16).Gap(10).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Box(c).Grow(1)
-			if ui.Button(c, p.tr("添加 MCP", "Add MCP")).Disabled(p.Busy || p.store == nil).Clicked() {
-				p.edit(library.Item{})
-			}
-			if ui.Button(c, p.tr("添加 Skill", "Add Skill")).Disabled(p.Busy || p.store == nil).Clicked() {
-				p.source = ""
-				p.failure = ""
-				p.skillOpen = true
-			}
-		})
-		ui.Row(c).Gap(8).Children(func() {
 			if ui.TextInput(c.Key("resource-search"), &p.query).Label(p.tr("搜索资源", "Search resources")).Placeholder(p.tr("搜索名称或说明", "Search name or description")).Grow(1).Changed() {
 				p.page = 0
 			}
@@ -172,6 +161,14 @@ func (p *Panel) View(c *ui.Context) {
 			}
 			if ui.Select(c, &p.kind, []string{p.tr("全部", "All"), "MCP", "Skill"}).Width(100).Changed() {
 				p.page = 0
+			}
+			if ui.Button(c, p.tr("添加 MCP", "Add MCP")).Disabled(p.Busy || p.store == nil).Clicked() {
+				p.edit(library.Item{})
+			}
+			if ui.Button(c, p.tr("添加 Skill", "Add Skill")).Disabled(p.Busy || p.store == nil).Clicked() {
+				p.source = ""
+				p.failure = ""
+				p.skillOpen = true
 			}
 		})
 		p.resourceList(c)
