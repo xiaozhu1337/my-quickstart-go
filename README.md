@@ -33,6 +33,10 @@ Select resources, choose **codex** or **pi**, select a project directory, and cl
 
 MCP names can be edited after saving. Linking a renamed resource again replaces its previously managed name in that project, while preserving other servers. Duplicate resource names remain disallowed.
 
+Use the waveform icon on an MCP row to **Check availability**. The check connects using the saved local command (arguments, environment, working directory) or Streamable HTTP configuration, then lists tool names and descriptions across pages without invoking tools. The dialog shows results or errors. Checks time out after 10 seconds and support cancellation. Completion, failure, or cancellation closes the temporary connection and reaps owned local processes and descendants; HTTP sessions are terminated on a best-effort basis and idle connections are closed. Results are temporary, with no background monitoring. Discovery is capped at 500 tools and 50 pages, with a notice for partial results. Public HTTP endpoints use `http://192.168.1.99:7890`; LAN addresses connect directly. Authentication uses configured credentials only, without an OAuth login flow.
+
+![MCP availability check with sample data](docs/mcp-check-preview.png)
+
 MCP rows have an **Edit** button; Skill rows have **Open folder**, which opens the imported library directory in Windows Explorer. You can edit `SKILL.md` and supporting files there; linked projects use those same files. The list's saved name and description are library metadata. MCP configuration comments include concrete `args`, `env`, `cwd`, and HTTP `headers` examples, including on existing entries.
 
 Use **Pin** / **Unpin** on either resource type to keep it at the top. Pin state persists across restarts and MCP edits; multiple pinned resources retain their original relative order. Unpinning restores the resource's place among unpinned entries. Row action buttons do not change selection, and hover/selection highlights keep row sizes fixed.

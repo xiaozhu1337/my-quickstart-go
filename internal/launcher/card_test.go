@@ -83,9 +83,9 @@ func TestCardHighlightFollowsHoverAndKeyboardFocus(t *testing.T) {
 				check("Another App", false, false)
 				tt.SetFocused(true)
 				check("Another App", false, true)
-				if err := tt.Click("Another App"); err != nil {
-					t.Fatal(err)
-				}
+				// Grid cells and their nested buttons share the accessible name.
+				// Click the visible card, avoiding the wrapper's label lookup.
+				tt.ClickAt(other.X+other.W/2, other.Y+other.H/2)
 				tt.Move(float32(size.width-20), 580)
 				check("Another App", false, false)
 			})

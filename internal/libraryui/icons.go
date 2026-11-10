@@ -15,10 +15,14 @@ var editSVG []byte
 //go:embed icons/folder.svg
 var folderSVG []byte
 
+//go:embed icons/check.svg
+var checkSVG []byte
+
 var (
 	pinIcon    = ui.MustParseSVG(pinSVG)
 	editIcon   = ui.MustParseSVG(editSVG)
 	folderIcon = ui.MustParseSVG(folderSVG)
+	checkIcon  = ui.MustParseSVG(checkSVG)
 )
 
 func actionButton(c *ui.Context, label string, icon *ui.SVG, active, disabled bool) ui.Element {

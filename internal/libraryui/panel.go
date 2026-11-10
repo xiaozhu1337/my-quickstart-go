@@ -14,6 +14,7 @@ import (
 )
 
 type Panel struct {
+	probeState
 	Window                                    *mygo.Window
 	Language                                  string
 	Busy                                      bool
@@ -213,6 +214,7 @@ func (p *Panel) View(c *ui.Context) {
 		}
 	})
 	p.dialogs(c)
+	p.probeDialog(c)
 }
 
 func (p *Panel) resourceList(c *ui.Context) {
@@ -273,6 +275,9 @@ func (p *Panel) resourceList(c *ui.Context) {
 			}
 			if actionButton(c, pinLabel, pinIcon, i.Pinned, p.Busy).Clicked() {
 				p.run(func() (string, error) { return "", p.store.SetPinned(i.ID, !i.Pinned) }, false)
+			}
+			if i.Kind == "mcp" && actionButton(c, p.tr("检测可用性", "Check availability"), checkIcon, false, p.Busy).Clicked() {
+				p.startProbe(i)
 			}
 			if i.Kind == "skill" {
 				if actionButton(c, p.tr("打开目录", "Open folder"), folderIcon, false, p.Busy).Clicked() {
