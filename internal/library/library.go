@@ -24,6 +24,7 @@ type Item struct {
 	Description string  `yaml:"description,omitempty"`
 	MCP         *Server `yaml:"mcp,omitempty"`
 	Directory   string  `yaml:"directory,omitempty"`
+	Pinned      bool    `yaml:"pinned,omitempty"`
 }
 
 type Server struct {
@@ -94,6 +95,7 @@ func (l *Library) read() ([]Item, error) {
 const libraryComment = `# Resource library. UTF-8; managed by My Quickstart Go.
 # id: stable resource ID; kind: mcp or skill; name: agent-facing name.
 # description: display summary; directory: imported skill directory relative to this file.
+# pinned: display this resource before unpinned resources.
 # mcp.command: executable; args: argument list; env: environment variables; cwd: absolute working directory.
 # mcp.url: HTTP endpoint (exclusive with command); headers: HTTP request headers.
 `
@@ -177,6 +179,7 @@ func (l *Library) saveMCP(id, name, description string, s *Server) error {
 	for n, old := range items {
 		if old.ID == id {
 			index = n
+			i.Pinned = old.Pinned
 			if old.Kind != "mcp" {
 				return errors.New("资源不是 MCP")
 			}

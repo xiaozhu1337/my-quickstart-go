@@ -142,6 +142,10 @@ func TestLibraryPreview(t *testing.T) {
 	p.items, _ = p.store.Items()
 	p.selected[p.items[0].ID] = true
 	p.selected[p.items[3].ID] = true
+	if err := p.store.SetPinned(p.items[2].ID, true); err != nil {
+		t.Fatal(err)
+	}
+	p.items, _ = p.store.Items()
 	p.project = "C:/Users/Administrator/code/my-project"
 	tt := ui.NewTester(func(c *ui.Context) {
 		ui.Column(c).Fill().Children(func() {
@@ -172,7 +176,6 @@ func TestLibraryPreview(t *testing.T) {
 			open func()
 		}{
 			{"mcp-editor.png", func() { p.edit(library.Item{}) }},
-			{"skill-editor.png", func() { p.editOpen = false; p.edit(p.items[3]) }},
 		} {
 			item.open()
 			tt.Frame()

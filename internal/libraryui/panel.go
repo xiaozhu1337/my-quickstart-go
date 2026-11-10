@@ -3,12 +3,14 @@ package libraryui
 import (
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"go.yaml.in/yaml/v3"
 	"my-quickstart-go/internal/library"
+	"my-quickstart-go/internal/platform"
 )
 
 type Panel struct {
@@ -22,9 +24,8 @@ type Panel struct {
 	message, failure                          string
 	list                                      ui.ListState
 	editOpen, skillOpen, removeOpen           bool
-	skillEditOpen                             bool
-	resetMCP, resetSkill                      bool
-	skillID, skillDocument                    string
+	resetMCP                                  bool
+	openFolder                                func(string) error
 	editID, name, description, config, source string
 	magpieSource                              string
 	importReport                              *library.ImportReport
@@ -32,7 +33,7 @@ type Panel struct {
 }
 
 func New(root string) *Panel {
-	p := &Panel{selected: map[string]bool{}, agent: "codex", magpieSource: library.DefaultMagpiePath()}
+	p := &Panel{selected: map[string]bool{}, agent: "codex", magpieSource: library.DefaultMagpiePath(), openFolder: platform.OpenFolder}
 	var err error
 	p.store, err = library.Open(root)
 	if err == nil {
@@ -83,7 +84,6 @@ func (p *Panel) run(job func() (string, error), closeDialog bool) {
 			p.selected = valid
 			if closeDialog {
 				p.editOpen, p.skillOpen, p.removeOpen = false, false, false
-				p.skillEditOpen = false
 			}
 		}
 		if p.Window != nil {
@@ -110,10 +110,6 @@ func (p *Panel) ids() []string {
 }
 
 func (p *Panel) edit(i library.Item) {
-	if i.Kind == "skill" {
-		p.editSkill(i)
-		return
-	}
 	p.editID, p.name, p.description = i.ID, i.Name, i.Description
 	p.config = mcpExample
 	if i.MCP != nil {
@@ -237,10 +233,19 @@ func (p *Panel) resourceList(c *ui.Context) {
 	if len(matches) == 0 {
 		ui.Text(c, p.tr("暂无资源。添加 MCP 配置，或导入包含 SKILL.md 的目录。", "No resources. Add an MCP config or import a directory containing SKILL.md.")).TextColor(c.Theme().TextMuted).Padding(20, 0)
 	}
+	slices.SortStableFunc(matches, func(a, b library.Item) int {
+		if a.Pinned == b.Pinned {
+			return 0
+		}
+		if a.Pinned {
+			return -1
+		}
+		return 1
+	})
 	p.list.Key = func(n int) any { return matches[n].ID }
 	ui.List(c, &p.list, len(matches), func(n int) {
 		i := matches[n]
-		row := ui.Row(c.Key(i.ID)).Label(i.Name).Padding(10).Margin(0, 0, 8, 0).Gap(12).AlignItems(ui.Center).Background(c.Theme().Surface).Radius(8).Disabled(p.Busy)
+		row := ui.Row(c.Key(i.ID)).Label(i.Name).Padding(10).Margin(0, 0, 8, 0).Gap(12).AlignItems(ui.Center).Background(c.Theme().Surface).Border(1, c.Theme().Accent.Alpha(0)).Radius(8).Disabled(p.Busy)
 		hovered := row.Hovered()
 		if p.selected[i.ID] {
 			alpha := float32(0.14)
@@ -262,7 +267,24 @@ func (p *Panel) resourceList(c *ui.Context) {
 			}
 			ui.Text(c, kind).Width(40).FontSize(11).TextColor(c.Theme().Accent)
 			ui.Text(c, i.Description).SingleLine().Tooltip(i.Description).Grow(1).TextColor(c.Theme().TextMuted)
-			if ui.Button(c, p.tr("编辑", "Edit")).Disabled(p.Busy).Clicked() {
+			pinLabel := p.tr("置顶", "Pin")
+			if i.Pinned {
+				pinLabel = p.tr("取消置顶", "Unpin")
+			}
+			if ui.Button(c, pinLabel).Width(86).Disabled(p.Busy).Clicked() {
+				p.run(func() (string, error) { return "", p.store.SetPinned(i.ID, !i.Pinned) }, false)
+			}
+			if i.Kind == "skill" {
+				if ui.Button(c, p.tr("打开目录", "Open folder")).Width(100).Disabled(p.Busy).Clicked() {
+					p.run(func() (string, error) {
+						path, err := p.store.SkillDirectory(i.ID)
+						if err != nil {
+							return "", err
+						}
+						return "", p.openFolder(path)
+					}, false)
+				}
+			} else if ui.Button(c, p.tr("编辑", "Edit")).Width(100).Disabled(p.Busy).Clicked() {
 				p.edit(i)
 			}
 		})

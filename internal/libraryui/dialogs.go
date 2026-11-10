@@ -7,7 +7,6 @@ import (
 )
 
 func (p *Panel) dialogs(c *ui.Context) {
-	p.skillEditor(c)
 	_, height := c.Size()
 	ui.Modal(c, &p.editOpen, func() {
 		ui.Text(c, p.tr("保存 MCP 到资源库", "Save MCP to library")).FontSize(20).Bold()
