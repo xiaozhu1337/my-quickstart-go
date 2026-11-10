@@ -25,13 +25,15 @@ More previews: [themes](docs/themes-preview.png), [search](docs/search-preview.p
 
 ## MCP and skill library
 
-The top tabs switch between **Launcher** and **MCP / Skills**, preserving launcher search and group state. The library has search, type filters, 40-item pages, and selection across pages.
+The top tabs switch between **Launcher** and **MCP / Skills**, preserving launcher search and group state. The library has search, type filters, and a single scrolling list. Rows are spaced apart and highlight on hover; click anywhere on a row to toggle its selection. Multiple selections persist across searches, with no checkboxes or pagination.
 
 Use **Add MCP** to save a named server with YAML fields `command`, `args`, `env`, `cwd`, or HTTP `url` and `headers`. Use **Add Skill** to import a directory containing `SKILL.md` with `name` and `description` frontmatter. Supporting scripts and references are copied into the library. Imports containing symlinks are rejected; each import is limited to 100 MiB and 10,000 paths.
 
 Select resources, choose **codex** or **pi**, select a project directory, and click **Link to project**.
 
 MCP names can be edited after saving. Linking a renamed resource again replaces its previously managed name in that project, while preserving other servers. Duplicate resource names remain disallowed.
+
+Both MCP and Skill rows have an **Edit** button that does not change selection. MCP configuration comments include concrete `args`, `env`, `cwd`, and HTTP `headers` examples, including on existing entries. Skill editing modifies the library's `SKILL.md` (up to 2 MiB), validates its frontmatter, and updates its displayed name and description. Supporting files and the original import source stay intact; existing project symlinks see saved content immediately. If a skill is renamed, link it again to create the new project name; old links remain usable.
 
 To migrate existing resources, open **Settings → Resources → Resource import → Import MCPs and skills from magpie**. The default source is `~/.config/magpie` (or `$XDG_CONFIG_HOME/magpie`); portable installations can use the install folder or its `data` folder. Import copies standard stdio/HTTP MCP definitions, notes, and complete local skill folders, including skills whose root directory is a symlink. Existing same-kind names are skipped, and invalid or unsupported entries are reported individually. SSE and servers with disabled-tool/startup-timeout overrides are reported as unsupported. Magpie's own configuration and files are not changed; agent assignments, OAuth sessions, and plugin runtime state are not migrated. Importing does not deploy resources to a project.
 

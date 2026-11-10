@@ -20,9 +20,11 @@ type Panel struct {
 	selected                                  map[string]bool
 	query, kind, project, agent               string
 	message, failure                          string
-	page                                      int
 	list                                      ui.ListState
 	editOpen, skillOpen, removeOpen           bool
+	skillEditOpen                             bool
+	resetMCP, resetSkill                      bool
+	skillID, skillDocument                    string
 	editID, name, description, config, source string
 	magpieSource                              string
 	importReport                              *library.ImportReport
@@ -81,6 +83,7 @@ func (p *Panel) run(job func() (string, error), closeDialog bool) {
 			p.selected = valid
 			if closeDialog {
 				p.editOpen, p.skillOpen, p.removeOpen = false, false, false
+				p.skillEditOpen = false
 			}
 		}
 		if p.Window != nil {
@@ -107,17 +110,22 @@ func (p *Panel) ids() []string {
 }
 
 func (p *Panel) edit(i library.Item) {
+	if i.Kind == "skill" {
+		p.editSkill(i)
+		return
+	}
 	p.editID, p.name, p.description = i.ID, i.Name, i.Description
-	p.config = "# command: executable; args: argument list\ncommand: pnpm\nargs: [dlx, '@modelcontextprotocol/server-filesystem', 'C:/workspace']\n# env: environment variables; cwd: absolute working directory\n# For HTTP, replace command/args with url and optional headers.\n"
+	p.config = mcpExample
 	if i.MCP != nil {
 		b, err := yaml.Marshal(i.MCP)
 		if err != nil {
 			p.fail(err)
 			return
 		}
-		p.config = string(b)
+		p.config = string(b) + "\n" + mcpHelp
 	}
 	p.failure = ""
+	p.resetMCP = true
 	p.editOpen = true
 }
 
@@ -153,15 +161,11 @@ func (p *Panel) pick(skill bool) {
 func (p *Panel) View(c *ui.Context) {
 	ui.Column(c).Grow(1).FillWidth().Padding(16).Gap(10).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			if ui.TextInput(c.Key("resource-search"), &p.query).Label(p.tr("搜索资源", "Search resources")).Placeholder(p.tr("搜索名称或说明", "Search name or description")).Grow(1).Changed() {
-				p.page = 0
-			}
+			ui.TextInput(c.Key("resource-search"), &p.query).Label(p.tr("搜索资源", "Search resources")).Placeholder(p.tr("搜索名称或说明", "Search name or description")).Grow(1)
 			if p.kind == "" || p.kind == "全部" || p.kind == "All" {
 				p.kind = p.tr("全部", "All")
 			}
-			if ui.Select(c, &p.kind, []string{p.tr("全部", "All"), "MCP", "Skill"}).Width(100).Changed() {
-				p.page = 0
-			}
+			ui.Select(c, &p.kind, []string{p.tr("全部", "All"), "MCP", "Skill"}).Width(100)
 			if ui.Button(c, p.tr("添加 MCP", "Add MCP")).Disabled(p.Busy || p.store == nil).Clicked() {
 				p.edit(library.Item{})
 			}
@@ -226,52 +230,40 @@ func (p *Panel) resourceList(c *ui.Context) {
 			matches = append(matches, i)
 		}
 	}
-	const pageSize = 40
-	pages := max(1, (len(matches)+pageSize-1)/pageSize)
-	p.page = min(max(p.page, 0), pages-1)
-	entries := matches[min(p.page*pageSize, len(matches)):min((p.page+1)*pageSize, len(matches))]
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		all := len(entries) > 0
-		for _, i := range entries {
-			if !p.selected[i.ID] {
-				all = false
-			}
-		}
-		if ui.Checkbox(c, &all, p.tr("选择本页", "Select page")).Disabled(p.Busy).Changed() {
-			for _, i := range entries {
-				p.selected[i.ID] = all
-			}
-		}
 		ui.Text(c, fmt.Sprintf(p.tr("共 %d 项", "%d resources"), len(matches))).TextColor(c.Theme().TextMuted).Grow(1)
-		if ui.Button(c, p.tr("上一页", "Previous")).Disabled(p.page == 0 || p.Busy).Clicked() {
-			p.page--
-		}
-		ui.Text(c, fmt.Sprintf("%d / %d", p.page+1, pages))
-		if ui.Button(c, p.tr("下一页", "Next")).Disabled(p.page+1 == pages || p.Busy).Clicked() {
-			p.page++
-		}
+		ui.Text(c, p.tr("单击条目选择或取消，可多选", "Click rows to toggle selection; multiple selections allowed")).FontSize(11).TextColor(c.Theme().TextMuted)
 	})
 	if len(matches) == 0 {
 		ui.Text(c, p.tr("暂无资源。添加 MCP 配置，或导入包含 SKILL.md 的目录。", "No resources. Add an MCP config or import a directory containing SKILL.md.")).TextColor(c.Theme().TextMuted).Padding(20, 0)
 	}
-	p.list.Key = func(n int) any { return entries[n].ID }
-	ui.List(c, &p.list, len(entries), func(n int) {
-		i := entries[n]
-		ui.Row(c.Key(i.ID)).Padding(10).Gap(12).AlignItems(ui.Center).Background(c.Theme().Surface).Radius(8).Children(func() {
-			checked := p.selected[i.ID]
-			if ui.Checkbox(c, &checked, i.Name).Width(180).Disabled(p.Busy).Changed() {
-				p.selected[i.ID] = checked
+	p.list.Key = func(n int) any { return matches[n].ID }
+	ui.List(c, &p.list, len(matches), func(n int) {
+		i := matches[n]
+		row := ui.Row(c.Key(i.ID)).Label(i.Name).Padding(10).Margin(0, 0, 8, 0).Gap(12).AlignItems(ui.Center).Background(c.Theme().Surface).Radius(8).Disabled(p.Busy)
+		hovered := row.Hovered()
+		if p.selected[i.ID] {
+			alpha := float32(0.14)
+			if hovered {
+				alpha = 0.22
 			}
+			row.Background(c.Theme().Accent.Alpha(alpha)).Border(1, c.Theme().Accent.Alpha(0.5))
+		} else if hovered {
+			row.Background(c.Theme().SurfaceHover).Border(1, c.Theme().Accent.Alpha(0.25))
+		}
+		if row.Clicked() {
+			p.selected[i.ID] = !p.selected[i.ID]
+		}
+		row.Children(func() {
+			ui.Text(c, i.Name).SingleLine().Tooltip(i.Name).Width(180)
 			kind := "MCP"
 			if i.Kind == "skill" {
 				kind = "Skill"
 			}
 			ui.Text(c, kind).Width(40).FontSize(11).TextColor(c.Theme().Accent)
 			ui.Text(c, i.Description).SingleLine().Tooltip(i.Description).Grow(1).TextColor(c.Theme().TextMuted)
-			if i.Kind == "mcp" {
-				if ui.Button(c, p.tr("编辑", "Edit")).Disabled(p.Busy).Clicked() {
-					p.edit(i)
-				}
+			if ui.Button(c, p.tr("编辑", "Edit")).Disabled(p.Busy).Clicked() {
+				p.edit(i)
 			}
 		})
 	}).Grow(1)

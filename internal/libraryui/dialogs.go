@@ -7,6 +7,7 @@ import (
 )
 
 func (p *Panel) dialogs(c *ui.Context) {
+	p.skillEditor(c)
 	_, height := c.Size()
 	ui.Modal(c, &p.editOpen, func() {
 		ui.Text(c, p.tr("保存 MCP 到资源库", "Save MCP to library")).FontSize(20).Bold()
@@ -16,8 +17,12 @@ func (p *Panel) dialogs(c *ui.Context) {
 				ui.TextInput(c.Key("mcp-name"), &p.name).Label(p.tr("MCP 名称", "MCP name")).Disabled(p.Busy).AutoFocus()
 				ui.Text(c, p.tr("说明", "Description"))
 				ui.TextInput(c.Key("mcp-description"), &p.description).Label(p.tr("MCP 说明", "MCP description")).Disabled(p.Busy)
-				ui.Text(c, p.tr("配置（YAML）：command / args / env / cwd 或 url / headers", "YAML config: command / args / env / cwd OR url / headers")).FontSize(12)
-				ui.TextArea(c.Key("mcp-config"), &p.config).Label(p.tr("MCP 配置", "MCP configuration")).Height(200).Disabled(p.Busy)
+				ui.Text(c, p.tr("配置（YAML）：注释中有参数、环境变量、工作目录及 HTTP 示例，取消 # 即可启用。", "YAML config: comments show arguments, environment, working directory and HTTP examples; remove # to enable.")).FontSize(12)
+				config := ui.TextArea(c.Key("mcp-config"), &p.config).Label(p.tr("MCP 配置", "MCP configuration")).Height(280).Disabled(p.Busy)
+				if p.resetMCP {
+					config.SetTextSelection(0, 0)
+					p.resetMCP = false
+				}
 				ui.Text(c, p.tr("编辑后需重新链接到项目，才会更新该项目的 MCP 配置。", "Link again after editing to update the project's MCP config.")).FontSize(11).TextColor(c.Theme().TextMuted)
 			})
 		})
@@ -34,7 +39,7 @@ func (p *Panel) dialogs(c *ui.Context) {
 				}, true)
 			}
 		})
-	}).Label("MCP").Width(700).Height(min(560, height-32))
+	}).Label("MCP").Width(760).Height(min(650, height-32))
 	ui.Modal(c, &p.skillOpen, func() {
 		ui.Text(c, p.tr("导入 Skill", "Import skill")).FontSize(20).Bold()
 		ui.Text(c, p.tr("选择包含 SKILL.md 的目录；整个目录会复制并统一保存到资源库。", "Choose a directory containing SKILL.md; its contents are copied into the library."))

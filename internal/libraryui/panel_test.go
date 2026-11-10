@@ -8,9 +8,10 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"my-quickstart-go/internal/library"
 )
 
-func TestPaginationKeepsSelectionAcrossSearch(t *testing.T) {
+func TestSingleListKeepsSelectionAcrossSearch(t *testing.T) {
 	p := New(filepath.Join(t.TempDir(), "library"))
 	for n := 0; n < 45; n++ {
 		if err := p.store.SaveMCP("", fmt.Sprintf("server-%02d", n), "", "command: tool"); err != nil {
@@ -19,19 +20,19 @@ func TestPaginationKeepsSelectionAcrossSearch(t *testing.T) {
 	}
 	p.items, _ = p.store.Items()
 	tt := ui.NewTester(p.View, 960, 580)
-	click(t, tt, "选择本页")
-	if len(p.ids()) != 40 {
-		t.Fatal("page selection must select exactly 40 resources")
+	if tt.HasText("选择本页") || tt.HasText("上一页") || tt.HasText("下一页") || !tt.HasText("共 45 项") {
+		t.Fatal("expected a single list without pagination")
 	}
-	click(t, tt, "下一页")
-	click(t, tt, "server-44")
-	if len(p.ids()) != 41 {
-		t.Fatal("selection was lost across pages")
-	}
+	click(t, tt, "server-00")
 	click(t, tt, "搜索资源")
 	tt.Type("server-44")
-	if p.page != 0 || len(p.ids()) != 41 || !tt.HasText("共 1 项") {
-		t.Fatal("search lost selection or did not reset pagination")
+	click(t, tt, "server-44")
+	if len(p.ids()) != 2 || !tt.HasText("共 1 项") {
+		t.Fatal("search lost selection or could not select beyond the former first page")
+	}
+	click(t, tt, "server-44")
+	if len(p.ids()) != 1 {
+		t.Fatal("row click must toggle only that selection")
 	}
 }
 
@@ -154,6 +155,9 @@ func TestLibraryPreview(t *testing.T) {
 			p.View(c)
 		})
 	}, 1100, 680)
+	if r, ok := tt.Find("browser-tools"); ok {
+		tt.Move(r.X+r.W/2, r.Y+r.H/2)
+	}
 	f, err := os.Create(destination)
 	if err != nil {
 		t.Fatal(err)
@@ -161,5 +165,26 @@ func TestLibraryPreview(t *testing.T) {
 	defer f.Close()
 	if err := png.Encode(f, tt.Image()); err != nil {
 		t.Fatal(err)
+	}
+	if dialogDir := os.Getenv("QUICKSTART_DIALOG_PREVIEWS"); dialogDir != "" {
+		for _, item := range []struct {
+			name string
+			open func()
+		}{
+			{"mcp-editor.png", func() { p.edit(library.Item{}) }},
+			{"skill-editor.png", func() { p.editOpen = false; p.edit(p.items[3]) }},
+		} {
+			item.open()
+			tt.Frame()
+			out, err := os.Create(filepath.Join(dialogDir, item.name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = png.Encode(out, tt.Image())
+			closeErr := out.Close()
+			if err != nil || closeErr != nil {
+				t.Fatal(err, closeErr)
+			}
+		}
 	}
 }
