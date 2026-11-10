@@ -102,8 +102,8 @@ func TestDeployBothAgentsAndUpdate(t *testing.T) {
 			if read(t, r.Backup) != original {
 				t.Fatal("backup must preserve exact original bytes")
 			}
-			if _, err = os.Readlink(path); err != nil {
-				t.Fatal("config is not a symlink", err)
+			if info, err := os.Lstat(path); err != nil || !info.Mode().IsRegular() {
+				t.Fatal("config is not a regular file", err)
 			}
 			doc := configDoc(t, path, agent)
 			servers := doc[key].(map[string]any)
@@ -124,8 +124,8 @@ func TestDeployBothAgentsAndUpdate(t *testing.T) {
 				t.Fatal("unrelated config lost")
 			}
 			skillLink := filepath.Join(project, skills, "sample-skill")
-			if _, err = os.Readlink(skillLink); err != nil {
-				t.Fatal("skill is not a symlink", err)
+			if info, err := os.Lstat(skillLink); err != nil || !info.IsDir() {
+				t.Fatal("skill is not a regular directory", err)
 			}
 			if read(t, filepath.Join(skillLink, "references", "guide.md")) != "Useful reference" {
 				t.Fatal("skill assets lost")
@@ -182,7 +182,7 @@ func TestConflictsAndInvalidConfigDoNotModifyProject(t *testing.T) {
 	}
 }
 
-func TestLinkFailureRollsBackConfigAndManifest(t *testing.T) {
+func TestCopyFailureRollsBackConfigAndManifest(t *testing.T) {
 	for _, existing := range []bool{false, true} {
 		t.Run(map[bool]string{false: "new", true: "existing"}[existing], func(t *testing.T) {
 			l, project, ids := fixture(t)
@@ -191,13 +191,9 @@ func TestLinkFailureRollsBackConfigAndManifest(t *testing.T) {
 			if existing {
 				write(t, path, original)
 			}
-			calls := 0
-			l.symlink = func(target, path string) error {
-				calls++
-				if calls == 2 {
-					return errors.New("injected symlink failure")
-				}
-				return os.Symlink(target, path)
+			l.copySkill = func(source, path string) ([]string, error) {
+				created, err := copySkillDirectory(source, path)
+				return created, errors.Join(err, errors.New("injected copy failure"))
 			}
 			if _, err := l.Deploy(project, "codex", ids); err == nil || !strings.Contains(err.Error(), "injected") {
 				t.Fatal("expected injected failure", err)
@@ -306,7 +302,7 @@ func TestRollbackRestoresPreviouslyDeployedConfig(t *testing.T) {
 	}
 	path := filepath.Join(project, ".pi", "mcp.json")
 	original := read(t, path)
-	l.symlink = func(string, string) error { return errors.New("injected failure") }
+	l.copySkill = func(string, string) ([]string, error) { return nil, errors.New("injected failure") }
 	if _, err := l.Deploy(project, "pi", ids); err == nil {
 		t.Fatal("expected failure")
 	}

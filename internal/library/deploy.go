@@ -11,15 +11,16 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/pelletier/go-toml/v2"
 	"go.yaml.in/yaml/v3"
 )
 
 type Deployment struct {
-	Project string            `yaml:"project"`
-	Agent   string            `yaml:"agent"`
-	Managed map[string]string `yaml:"managed"`
+	Project    string                   `yaml:"project"`
+	Agent      string                   `yaml:"agent"`
+	Managed    map[string]string        `yaml:"managed"`
+	ConfigHash string                   `yaml:"config_hash,omitempty"`
+	Skills     map[string]deployedSkill `yaml:"skills,omitempty"`
 }
 
 type Result struct {
@@ -29,12 +30,17 @@ type Result struct {
 
 type transaction struct {
 	undo    []func() error
-	symlink func(string, string) error
+	project string
+	temp    string
+	cleanup []string
 }
 
 func (t *transaction) rollback(err error) error {
 	for n := len(t.undo) - 1; n >= 0; n-- {
 		err = errors.Join(err, t.undo[n]())
+	}
+	if t.temp != "" {
+		err = errors.Join(err, os.Remove(t.temp))
 	}
 	return err
 }
@@ -171,6 +177,9 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 	} else if !errors.Is(e, os.ErrNotExist) {
 		return result, e
 	}
+	if manifest.Skills == nil {
+		manifest.Skills = map[string]deployedSkill{}
+	}
 	var skills []Item
 	for _, i := range selected {
 		if i.Kind == "skill" {
@@ -180,18 +189,37 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 			result.MCP++
 		}
 	}
+	skillHashes := map[string]string{}
 	if len(skills) > 0 {
 		if err = safeParent(project, skillRel); err != nil {
 			return result, err
 		}
 		for _, i := range skills {
 			target := filepath.Join(l.Root, i.Directory)
+			if err = safeParent(l.Root, i.Directory); err != nil {
+				return result, err
+			}
 			if _, err = os.Stat(filepath.Join(target, "SKILL.md")); err != nil {
 				return result, err
 			}
+			_, digest, e := skillInventory(target)
+			if e != nil {
+				return result, e
+			}
+			skillHashes[i.ID] = digest
 			path := filepath.Join(project, skillRel, i.Name)
-			if _, e := os.Lstat(path); e == nil && !linkedTo(path, target) {
-				return result, fmt.Errorf("Skill 同名冲突，未覆盖: %s", path)
+			if info, e := os.Lstat(path); e == nil && !linkedTo(path, target) {
+				owned, ok := manifest.Skills[i.Name]
+				if !info.IsDir() || !ok || owned.ID != i.ID {
+					return result, fmt.Errorf("Skill 同名冲突，未覆盖: %s", path)
+				}
+				_, digest, e := skillInventory(path)
+				if e != nil {
+					return result, e
+				}
+				if digest != owned.Hash {
+					return result, fmt.Errorf("项目 Skill 已修改，未覆盖: %s", path)
+				}
 			} else if e != nil && !errors.Is(e, os.ErrNotExist) {
 				return result, e
 			}
@@ -200,9 +228,6 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 	var rendered []byte
 	var regularConfig bool
 	if result.MCP > 0 {
-		if !linkedTo(config, generated) {
-			manifest.Managed = map[string]string{}
-		}
 		if err = safeParent(project, filepath.Dir(configRel)); err != nil {
 			return result, err
 		}
@@ -224,56 +249,54 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return result, err
 		}
+		owned := linkedTo(config, generated) || (manifest.ConfigHash != "" && manifest.ConfigHash == contentHash(data))
+		if !owned {
+			manifest.Managed = map[string]string{}
+		}
+		regularConfig = regularConfig && !owned
 		rendered, err = mergeConfig(data, agent, selected, &manifest)
 		if err != nil {
 			return result, err
 		}
 	}
-	tx := &transaction{symlink: l.symlink}
+	tx := &transaction{project: project}
 	fail := func(e error) (Result, error) { return Result{}, tx.rollback(e) }
 	if result.MCP > 0 {
-		if err = tx.write(generated, rendered); err != nil {
+		result.Backup, err = tx.replaceConfig(config, rendered, regularConfig)
+		if err != nil {
 			return fail(err)
 		}
-		if regularConfig {
-			backup := config + ".quickstart-backup-" + uuid.NewString()
-			if err = os.Rename(config, backup); err != nil {
-				return fail(err)
-			}
-			tx.undo = append(tx.undo, func() error { return os.Rename(backup, config) })
-			result.Backup = backup
-		}
-		if err = tx.link(config, generated); err != nil {
+		manifest.ConfigHash = contentHash(rendered)
+	}
+	for _, i := range skills {
+		path := filepath.Join(project, skillRel, i.Name)
+		_, err = tx.replace(path, false, func(dest string) ([]string, error) {
+			return l.copySkill(filepath.Join(l.Root, i.Directory), dest)
+		})
+		if err != nil {
 			return fail(err)
 		}
-		b, e := yaml.Marshal(manifest)
+		_, digest, e := skillInventory(path)
 		if e != nil {
 			return fail(e)
 		}
-		if err = tx.write(manifestPath, append([]byte("# project: canonical project path; agent: codex or pi.\n# managed: MCP names mapped to resource IDs owned by this deployment.\n"), b...)); err != nil {
-			return fail(err)
+		if digest != skillHashes[i.ID] {
+			return fail(errors.New("Skill 在复制期间发生变化"))
 		}
+		manifest.Skills[i.Name] = deployedSkill{ID: i.ID, Hash: digest}
 	}
-	for _, i := range skills {
-		if err = tx.link(filepath.Join(project, skillRel, i.Name), filepath.Join(l.Root, i.Directory)); err != nil {
-			return fail(err)
-		}
+	b, err := yaml.Marshal(manifest)
+	if err != nil {
+		return fail(err)
+	}
+	comment := "# project: canonical project path; agent: codex or pi.\n# managed: MCP names mapped to owned resource IDs.\n# config_hash: SHA-256 of the last deployed MCP file.\n# skills: deployed names mapped to resource id and content hash.\n"
+	if err = tx.write(manifestPath, append([]byte(comment), b...)); err != nil {
+		return fail(err)
+	}
+	if err = tx.finish(); err != nil {
+		return result, fmt.Errorf("部署已完成，但临时备份清理失败: %w", err)
 	}
 	return result, nil
-}
-
-func (t *transaction) link(path, target string) error {
-	if linkedTo(path, target) {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
-	}
-	if err := t.symlink(target, path); err != nil {
-		return fmt.Errorf("创建软链接失败（Windows 请启用开发者模式或使用管理员权限）: %w", err)
-	}
-	t.undo = append(t.undo, func() error { return os.Remove(path) })
-	return nil
 }
 
 func mergeConfig(data []byte, agent string, items []Item, manifest *Deployment) ([]byte, error) {

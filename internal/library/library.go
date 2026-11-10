@@ -37,9 +37,9 @@ type Server struct {
 }
 
 type Library struct {
-	Root    string
-	mu      sync.Mutex
-	symlink func(string, string) error
+	Root      string
+	mu        sync.Mutex
+	copySkill func(string, string) ([]string, error)
 }
 
 var safeName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`)
@@ -52,7 +52,11 @@ func Open(root string) (*Library, error) {
 	if err = os.MkdirAll(root, 0700); err != nil {
 		return nil, err
 	}
-	l := &Library{Root: root, symlink: os.Symlink}
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		return nil, err
+	}
+	l := &Library{Root: root, copySkill: copySkillDirectory}
 	_, err = l.Items()
 	return l, err
 }

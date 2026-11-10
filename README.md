@@ -29,15 +29,15 @@ The top tabs switch between **Launcher** and **MCP / Skills**, preserving launch
 
 Use **Add MCP** to save a named server with YAML fields `command`, `args`, `env`, `cwd`, or HTTP `url` and `headers`. Use **Add Skill** to import a directory containing `SKILL.md` with `name` and `description` frontmatter. Supporting scripts and references are copied into the library. Imports containing symlinks are rejected; each import is limited to 100 MiB and 10,000 paths.
 
-Select resources, choose **codex** or **pi**, select a project directory, and click **Link to project**.
+Select resources, choose **codex** or **pi**, select a project directory, and click **Copy to project**.
 
-MCP names can be edited after saving. Linking a renamed resource again replaces its previously managed name in that project, while preserving other servers. Duplicate resource names remain disallowed.
+MCP names can be edited after saving. Copying a renamed resource again replaces its previously managed name in that project, while preserving other servers. Duplicate resource names remain disallowed.
 
 Use the waveform icon on an MCP row to **Check availability**. The check connects using the saved local command (arguments, environment, working directory) or Streamable HTTP configuration, then lists tool names and descriptions across pages without invoking tools. The dialog shows results or errors. Checks time out after 10 seconds and support cancellation. Completion, failure, or cancellation closes the temporary connection and reaps owned local processes and descendants; HTTP sessions are terminated on a best-effort basis and idle connections are closed. Results are temporary, with no background monitoring. Discovery is capped at 500 tools and 50 pages, with a notice for partial results. Public HTTP endpoints use `http://192.168.1.99:7890`; LAN addresses connect directly. Authentication uses configured credentials only, without an OAuth login flow.
 
 ![MCP availability check with sample data](docs/mcp-check-preview.png)
 
-MCP rows have an **Edit** button; Skill rows have **Open folder**, which opens the imported library directory in Windows Explorer. You can edit `SKILL.md` and supporting files there; linked projects use those same files. The list's saved name and description are library metadata. MCP configuration comments include concrete `args`, `env`, `cwd`, and HTTP `headers` examples, including on existing entries.
+MCP rows have an **Edit** button; Skill rows have **Open folder**, which opens the imported library directory in Windows Explorer. You can edit `SKILL.md` and supporting files there; copy the resource to each project again to update its independent files. The list's saved name and description are library metadata. MCP configuration comments include concrete `args`, `env`, `cwd`, and HTTP `headers` examples, including on existing entries.
 
 Use **Pin** / **Unpin** on either resource type to keep it at the top. Pin state persists across restarts and MCP edits; multiple pinned resources retain their original relative order. Unpinning restores the resource's place among unpinned entries. Row action buttons do not change selection, and hover/selection highlights keep row sizes fixed.
 
@@ -45,16 +45,16 @@ To migrate existing resources, open **Settings → Resources → Resource import
 
 ![MCP and skill library with sample data](docs/library-preview.png)
 
-| Agent | MCP configuration symlink | Skill directory symlinks |
+| Agent | MCP configuration file | Skill directory copies |
 | --- | --- | --- |
 | Codex | `.codex/config.toml` | `.agents/skills/<name>` |
 | pi (native MCP) | `.pi/mcp.json` | `.pi/skills/<name>` |
 
-Resources live in `library` next to the database: `library.yaml` stores resource metadata and MCP definitions, `skills` holds imported assets, and `projects` holds separate generated configurations for each project. The library uses YAML; agent configurations use their required TOML or JSON formats.
+Resources live in `library` next to the database: `library.yaml` stores resource metadata and MCP definitions, `skills` holds imported assets, and `projects` holds deployment records for each project (legacy generated configs are retained for migration). The library uses YAML; agent configurations use their required TOML or JSON formats.
 
-Deployment adds or updates selected entries and preserves other settings and servers. Existing regular configuration files are backed up beside the original as `.quickstart-backup-<id>` before being replaced with a symlink. Generated configurations may reformat content and omit comments; backups retain the exact original bytes. Conflicting names or foreign symlinks stop deployment, and failed writes roll back changes. Editing an MCP requires linking it again to update each intended project. Removing a library entry retains deployed configurations and imported skill files so existing links remain usable; it does not uninstall project resources.
+Deployment writes MCP configuration as a regular project file and copies complete Skill directories. It adds or updates selected entries while preserving other settings and servers. Existing unmanaged configuration files are backed up beside the original as `.quickstart-backup-<id>`. Formatting and comments may change; backups retain the exact original bytes. Redeployment refreshes managed Skill copies, including removing files deleted from the source; locally modified Skill copies are protected from replacement. Conflicting names, unmanaged Skill directories and foreign symlinks stop deployment. Failed writes roll back changes. Deployment records include content digests to detect modified copies. Editing an MCP or Skill requires copying it again to each intended project; project copies remain independent.
 
-Windows symlinks require Developer Mode or administrator privileges. Both agents require project trust before loading project MCP configuration. Pi uses its current native MCP format, not older extension adapters. Credentials are stored as plain text in the local library and generated configuration files.
+Legacy symlinks created by this application are converted to independent copies when those resources are deployed again, preserving the library source. Copying does not require Windows Developer Mode or administrator privileges. Removing a library entry retains deployed configurations and Skill files; it does not uninstall project resources. Both agents require project trust before loading project MCP configuration. Pi uses its current native MCP format, not older extension adapters. Credentials are stored as plain text in the local library and project configuration files.
 
 The library design references [magpie](https://github.com/yetone/magpie); configuration locations follow [Codex MCP](https://developers.openai.com/codex/mcp), [Codex Skills](https://developers.openai.com/codex/skills), and [pi MCP](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/mcp.md).
 

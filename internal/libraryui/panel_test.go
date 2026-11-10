@@ -61,11 +61,11 @@ func TestAddSelectDeployAndReload(t *testing.T) {
 	project := t.TempDir()
 	click(t, tt, "项目目录")
 	tt.Type(project)
-	click(t, tt, "链接到项目")
+	click(t, tt, "复制到项目")
 	if p.failure != "" {
 		t.Fatal(p.failure)
 	}
-	if _, err := os.Readlink(filepath.Join(project, ".codex", "config.toml")); err != nil {
+	if info, err := os.Lstat(filepath.Join(project, ".codex", "config.toml")); err != nil || !info.Mode().IsRegular() {
 		t.Fatal(err)
 	}
 	if len(New(root).items) != 1 {
@@ -105,7 +105,7 @@ func TestSmallWindowAndDialogs(t *testing.T) {
 		click(t, tt, "sample")
 		p.project = t.TempDir()
 		tt.Frame()
-		click(t, tt, "链接到项目")
+		click(t, tt, "复制到项目")
 		if p.failure != "" {
 			t.Fatal(p.failure)
 		}

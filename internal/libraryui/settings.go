@@ -32,7 +32,7 @@ func (p *Panel) SettingsView(c *ui.Context) {
 		if r := p.importReport; r != nil {
 			ui.Text(c, fmt.Sprintf(p.tr("已导入 %d 个 MCP、%d 个 Skill；跳过 %d 项，失败 %d 项。", "Imported %d MCPs and %d skills; skipped %d, failed %d."), r.MCP, r.Skills, r.Skipped, r.Failed)).Bold()
 			if r.MCP+r.Skills > 0 {
-				ui.Text(c, p.tr("可在 MCP / Skills 中查看并选择要链接到项目的资源。", "Open MCP / Skills to select resources and link them to a project."))
+				ui.Text(c, p.tr("可在 MCP / Skills 中查看并选择要复制到项目的资源。", "Open MCP / Skills to select resources and copy them to a project."))
 			}
 			const size = 20
 			pages := max(1, (len(r.Details)+size-1)/size)

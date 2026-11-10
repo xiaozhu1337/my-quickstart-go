@@ -190,9 +190,9 @@ func (p *Panel) View(c *ui.Context) {
 			if ui.Button(c, p.tr("从库移除", "Remove from library")).Disabled(p.Busy || len(p.ids()) == 0).Clicked() {
 				p.removeOpen = true
 			}
-			if ui.PrimaryButton(c, p.tr("链接到项目", "Link to project")).Disabled(p.Busy || len(p.ids()) == 0 || strings.TrimSpace(p.project) == "").Clicked() {
+			if ui.PrimaryButton(c, p.tr("复制到项目", "Copy to project")).Disabled(p.Busy || len(p.ids()) == 0 || strings.TrimSpace(p.project) == "").Clicked() {
 				ids, project, agent := p.ids(), p.project, p.agent
-				format := p.tr("已链接 %d 个 MCP、%d 个 Skill 到 %s", "Linked %d MCPs and %d skills to %s")
+				format := p.tr("已复制 %d 个 MCP、%d 个 Skill 到 %s", "Copied %d MCPs and %d skills to %s")
 				backupLabel := p.tr("；原配置备份：", "; backup: ")
 				p.run(func() (string, error) {
 					r, err := p.store.Deploy(project, agent, ids)

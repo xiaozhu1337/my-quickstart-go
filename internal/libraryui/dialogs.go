@@ -22,7 +22,7 @@ func (p *Panel) dialogs(c *ui.Context) {
 					config.SetTextSelection(0, 0)
 					p.resetMCP = false
 				}
-				ui.Text(c, p.tr("编辑后需重新链接到项目，才会更新该项目的 MCP 配置。", "Link again after editing to update the project's MCP config.")).FontSize(11).TextColor(c.Theme().TextMuted)
+				ui.Text(c, p.tr("编辑后需重新复制到项目，才会更新该项目的 MCP 配置。", "Copy again after editing to update the project's MCP config.")).FontSize(11).TextColor(c.Theme().TextMuted)
 			})
 		})
 		p.dialogError(c)
@@ -62,7 +62,7 @@ func (p *Panel) dialogs(c *ui.Context) {
 	}).Label("Skill").Width(680)
 	ui.Modal(c, &p.removeOpen, func() {
 		ui.Text(c, p.tr("从资源库移除所选条目？", "Remove selected library entries?")).Bold()
-		ui.Text(c, p.tr("已链接到项目的配置和 Skill 文件会保留，可继续使用。", "Existing project configs and skill files are kept and remain usable."))
+		ui.Text(c, p.tr("已复制到项目的配置和 Skill 文件会保留，可继续使用。", "Existing project configs and skill files are kept and remain usable."))
 		p.dialogError(c)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, p.tr("取消", "Cancel")).Disabled(p.Busy).Clicked() {
