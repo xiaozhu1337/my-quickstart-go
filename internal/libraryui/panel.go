@@ -288,5 +288,5 @@ func (p *Panel) resourceList(c *ui.Context) {
 				p.edit(i)
 			}
 		})
-	}).Grow(1)
+	}).Grow(1).Padding(0, 16, 0, 0)
 }
