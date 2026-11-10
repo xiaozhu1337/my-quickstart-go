@@ -271,11 +271,11 @@ func (p *Panel) resourceList(c *ui.Context) {
 			if i.Pinned {
 				pinLabel = p.tr("取消置顶", "Unpin")
 			}
-			if ui.Button(c, pinLabel).Width(86).Disabled(p.Busy).Clicked() {
+			if actionButton(c, pinLabel, pinIcon, i.Pinned, p.Busy).Clicked() {
 				p.run(func() (string, error) { return "", p.store.SetPinned(i.ID, !i.Pinned) }, false)
 			}
 			if i.Kind == "skill" {
-				if ui.Button(c, p.tr("打开目录", "Open folder")).Width(100).Disabled(p.Busy).Clicked() {
+				if actionButton(c, p.tr("打开目录", "Open folder"), folderIcon, false, p.Busy).Clicked() {
 					p.run(func() (string, error) {
 						path, err := p.store.SkillDirectory(i.ID)
 						if err != nil {
@@ -284,7 +284,7 @@ func (p *Panel) resourceList(c *ui.Context) {
 						return "", p.openFolder(path)
 					}, false)
 				}
-			} else if ui.Button(c, p.tr("编辑", "Edit")).Width(100).Disabled(p.Busy).Clicked() {
+			} else if actionButton(c, p.tr("编辑", "Edit"), editIcon, false, p.Busy).Clicked() {
 				p.edit(i)
 			}
 		})
