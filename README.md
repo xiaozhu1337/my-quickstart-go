@@ -71,23 +71,13 @@ mise install go@1.27.3
 mise exec go@1.27.3 -- go run ./cmd/quickstart
 ```
 
-Build for your target platform:
+Build Windows x64 (the only target produced by the build script):
 
 ```sh
-python -X utf8 "scripts/build.py" --os windows --arch amd64
-python -X utf8 "scripts/build.py" --os darwin --arch arm64
-python -X utf8 "scripts/build.py" --os linux --arch amd64
+python -X utf8 "scripts/build.py"
 ```
 
-`--os` accepts `windows`, `darwin`, or `linux`; `--arch` accepts `amd64` or `arm64`. Build outputs are placed in the ignored `bin` directory and are not committed to this repository.
-
-| Platform | x64 / Intel | ARM64 / Apple Silicon |
-| --- | --- | --- |
-| Windows | `bin/windows-amd64/my-quickstart-go.exe` | `bin/windows-arm64/my-quickstart-go.exe` |
-| macOS | `bin/darwin-amd64/My Quickstart Go.app` | `bin/darwin-arm64/My Quickstart Go.app` |
-| Linux | `bin/linux-amd64/my-quickstart-go` | `bin/linux-arm64/my-quickstart-go` |
-
-On Windows, run the `.exe`; on macOS, open the `.app`; on Linux, run the binary in a desktop session. All targets build with `CGO_ENABLED=0`, while MyGo loads native system libraries at runtime.
+The script always builds `windows-amd64` and overwrites `bin/windows-amd64/my-quickstart-go.exe`. The existing `--os windows --arch amd64` arguments remain accepted; other targets are rejected. Keep only `windows-amd64` under `bin`; build outputs are ignored by Git. Run the resulting `.exe` on Windows. The build uses `CGO_ENABLED=0`, while MyGo loads native system libraries at runtime.
 
 Linux requires GTK 3. Tray support also requires `libayatana-appindicator3` and desktop support; Wayland global shortcuts depend on the desktop's GlobalShortcuts portal. Window positioning and always-on-top behavior can also be constrained by Wayland. macOS builds are not signed or notarized.
 

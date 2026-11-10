@@ -100,11 +100,9 @@ mise exec go@1.27.3 -- go vet ./...
 ```
 
 ```sh
-python -X utf8 "scripts/build.py" --os windows --arch amd64
-python -X utf8 "scripts/build.py" --os darwin --arch arm64
-python -X utf8 "scripts/build.py" --os linux --arch amd64
+python -X utf8 "scripts/build.py"
 ```
 
-`--arch` 支持 `amd64` 和 `arm64`；macOS 输出包含 Info.plist 和图标的 `.app`。图标源文件位于 `internal/branding`；Windows 图标资源已预生成到 `cmd/quickstart/icon_windows_amd64.syso` 和 `cmd/quickstart/icon_windows_arm64.syso`，正常构建不需要资源编译器。更换 ICO 时，可用 LLVM 的 `windres` 编译 `internal/branding/icon.rc` 为 `.res`，再用 `llvm-cvtres /MACHINE:X64` 和 `/MACHINE:ARM64` 分别更新对应 `.syso`。所有平台以 `CGO_ENABLED=0` 构建，运行时使用 MyGo 的原生系统接口。Linux 动态加载桌面系统库，不能将“无 CGO 编译”理解为“不需要桌面库”。
+构建脚本固定只生成 `windows-amd64`，每次覆盖 `bin/windows-amd64/my-quickstart-go.exe`；`bin` 下只保留此构建目录。原来的 `--os windows --arch amd64` 参数仍可使用，其他目标会被拒绝。图标源文件位于 `internal/branding`；Windows x64 图标资源已预生成到 `cmd/quickstart/icon_windows_amd64.syso`，正常构建不需要资源编译器。更换 ICO 时，可用 LLVM 的 `windres` 编译 `internal/branding/icon.rc` 为 `.res`，再用 `llvm-cvtres /MACHINE:X64` 更新对应 `.syso`。构建使用 `CGO_ENABLED=0`，运行时使用 MyGo 的原生系统接口。
 
 源代码：`cmd/quickstart` 为入口，`internal/launcher` 为原生界面及交互，`internal/model` 为状态，`internal/store` 为 SQLite 和迁移，`internal/platform` 为平台启动及快捷方式，`internal/logging` 为异步日志。

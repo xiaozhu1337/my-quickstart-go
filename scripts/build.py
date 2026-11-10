@@ -1,51 +1,30 @@
-"""Build native launchers with the Go toolchain managed by mise."""
+"""Build only windows-amd64 with the Go toolchain managed by mise."""
 import argparse
 import os
 from pathlib import Path
-import plistlib
-import platform
-import re
-import shutil
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = re.search(r'^const Version = "([^"]+)"$',
-                    (ROOT / "internal" / "buildinfo" / "info.go").read_text(encoding="utf-8"), re.MULTILINE).group(1)
 
 
-def build(target_os: str, arch: str) -> Path:
-    output = ROOT / "bin" / f"{target_os}-{arch}"
-    if target_os == "darwin":
-        bundle = output / "My Quickstart Go.app"
-        binary = bundle / "Contents" / "MacOS" / "my-quickstart-go"
-    else:
-        binary = output / ("my-quickstart-go.exe" if target_os == "windows" else "my-quickstart-go")
+def build(target_os: str = "windows", arch: str = "amd64") -> Path:
+    if (target_os, arch) != ("windows", "amd64"):
+        raise ValueError("Only windows-amd64 builds are supported")
+    binary = ROOT / "bin" / "windows-amd64" / "my-quickstart-go.exe"
     binary.parent.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env.update(GOOS=target_os, GOARCH=arch, CGO_ENABLED="0")
-    flags = "-s -w" + (" -H=windowsgui" if target_os == "windows" else "")
+    flags = "-s -w -H=windowsgui"
     subprocess.run(["mise", "exec", "go@1.27.3", "--", "go", "build", "-trimpath", "-ldflags", flags,
                     "-o", str(binary), "./cmd/quickstart"], cwd=ROOT, env=env, check=True, stdin=subprocess.DEVNULL,
                    creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
-    if target_os == "darwin":
-        info = {"CFBundleName": "My Quickstart Go", "CFBundleDisplayName": "My Quickstart Go",
-                "CFBundleIdentifier": "com.cat.my-quickstart-go", "CFBundleExecutable": binary.name,
-                "CFBundlePackageType": "APPL", "CFBundleVersion": "2", "CFBundleShortVersionString": VERSION,
-                "CFBundleIconFile": "icon.icns", "NSHighResolutionCapable": True}
-        resources = bundle / "Contents" / "Resources"
-        resources.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(ROOT / "internal" / "branding" / "icon.icns", resources / "icon.icns")
-        with (bundle / "Contents" / "Info.plist").open("wb") as handle:
-            plistlib.dump(info, handle)
     return binary
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--os", choices=["windows", "linux", "darwin"],
-                        default={"win32": "windows", "darwin": "darwin"}.get(sys.platform, "linux"))
-    parser.add_argument("--arch", choices=["amd64", "arm64"],
-                        default="arm64" if platform.machine().lower() in {"aarch64", "arm64"} else "amd64")
+    parser.add_argument("--os", choices=["windows"], default="windows")
+    parser.add_argument("--arch", choices=["amd64"], default="amd64")
     args = parser.parse_args()
     print(build(args.os, args.arch))
