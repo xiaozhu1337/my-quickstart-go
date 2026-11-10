@@ -25,7 +25,10 @@ func TestProbeButtonResultsAndSelection(t *testing.T) {
 		if config.Command != "probe" {
 			t.Fatal("wrong config")
 		}
-		return mcpcheck.Result{Server: "test-server 1.0", Tools: []mcpcheck.Tool{{Name: "search", Description: "Search project files"}, {Name: "read_file", Description: "Read a selected file"}}}, nil
+		return mcpcheck.Result{Server: "test-server 1.0", Tools: []mcpcheck.Tool{
+			{Name: "search", Description: strings.Repeat("Search project files and return matching paths with surrounding context. ", 20)},
+			{Name: "read_file", Description: "Read a selected file"},
+		}}, nil
 	}
 	tt := ui.NewTester(p.View, 960, 620)
 	click(t, tt, "检测可用性")

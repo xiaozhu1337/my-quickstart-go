@@ -116,7 +116,7 @@ func (p *Panel) probeDialog(c *ui.Context) {
 				ui.Column(c).Padding(10).Margin(0, 0, 8, 0).Gap(4).Background(c.Theme().Surface).Radius(6).Children(func() {
 					ui.Text(c, tool.Name).Bold().SingleLine().Tooltip(tool.Name)
 					if tool.Description != "" {
-						ui.Text(c, tool.Description).MaxHeight(80).Tooltip(tool.Description).TextColor(c.Theme().TextMuted)
+						ui.Text(c, tool.Description).FillWidth().MaxLines(4).Tooltip(tool.Description).TextColor(c.Theme().TextMuted)
 					}
 				})
 			}).Grow(1).Padding(0, 16, 0, 0)
