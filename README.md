@@ -23,6 +23,29 @@ Settings has five sections: **Appearance, Layout, Behavior, Hotkey, and About**.
 
 More previews: [themes](docs/themes-preview.png), [search](docs/search-preview.png), [entry editor](docs/editor-preview.png), and [drag reordering](docs/drag-preview.png). The previews are rendered with MyGo's headless UI tester and sample data. A detailed feature comparison and validation record is available in [Chinese](docs/FEATURES.md).
 
+## MCP and skill library
+
+The top tabs switch between **Launcher** and **MCP / Skills**, preserving launcher search and group state. The library has search, type filters, 40-item pages, and selection across pages.
+
+Use **Add MCP** to save a named server with YAML fields `command`, `args`, `env`, `cwd`, or HTTP `url` and `headers`. Use **Add Skill** to import a directory containing `SKILL.md` with `name` and `description` frontmatter. Supporting scripts and references are copied into the library. Imports containing symlinks are rejected; each import is limited to 100 MiB and 10,000 paths.
+
+Select resources, choose **codex** or **pi**, select a project directory, and click **Link to project**.
+
+![MCP and skill library with sample data](docs/library-preview.png)
+
+| Agent | MCP configuration symlink | Skill directory symlinks |
+| --- | --- | --- |
+| Codex | `.codex/config.toml` | `.agents/skills/<name>` |
+| pi (native MCP) | `.pi/mcp.json` | `.pi/skills/<name>` |
+
+Resources live in `library` next to the database: `library.yaml` stores resource metadata and MCP definitions, `skills` holds imported assets, and `projects` holds separate generated configurations for each project. The library uses YAML; agent configurations use their required TOML or JSON formats.
+
+Deployment adds or updates selected entries and preserves other settings and servers. Existing regular configuration files are backed up beside the original as `.quickstart-backup-<id>` before being replaced with a symlink. Generated configurations may reformat content and omit comments; backups retain the exact original bytes. Conflicting names or foreign symlinks stop deployment, and failed writes roll back changes. Editing an MCP requires linking it again to update each intended project. Removing a library entry retains deployed configurations and imported skill files so existing links remain usable; it does not uninstall project resources.
+
+Windows symlinks require Developer Mode or administrator privileges. Both agents require project trust before loading project MCP configuration. Pi uses its current native MCP format, not older extension adapters. Credentials are stored as plain text in the local library and generated configuration files.
+
+The library design references [magpie](https://github.com/yetone/magpie); configuration locations follow [Codex MCP](https://developers.openai.com/codex/mcp), [Codex Skills](https://developers.openai.com/codex/skills), and [pi MCP](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/mcp.md).
+
 ## Download
 
 Download a prebuilt package from the [latest release](https://github.com/xiaozhu1337/my-quickstart-go/releases/latest):
@@ -95,7 +118,7 @@ Relative paths remain relative to the **new executable's directory**. Place the 
 
 Use `--data "path/to/launcher.db"` to select a separate database. Custom paths do not trigger automatic legacy import. If the old app has only saved data in WebView localStorage, run it once to persist the data to SQLite before migrating.
 
-Entries and settings remain in local SQLite, including environment variable values stored as plain text. Removing an entry does not delete its target. Errors are logged asynchronously to `logs/launcher.log` next to the executable, so that directory must be writable.
+Entries and settings remain in local SQLite, including environment variable values stored as plain text. Removing an entry does not delete its target. Errors are logged asynchronously to `logs/launcher.log` next to the executable, so that directory must be writable. Logs rotate at 2 MiB and keep the current file plus two backups.
 
 ## Testing
 
@@ -115,6 +138,8 @@ Windows tests, race checks, and static checks pass. Headless UI and backend test
 | --- | --- |
 | `cmd/quickstart` | Application entry point and generated Windows icon resources |
 | `internal/launcher` | Native views, interactions, and persistence scheduling |
+| `internal/library` | YAML resource storage, skill imports, and transactional agent deployment |
+| `internal/libraryui` | MCP / Skills list, editors, selection, and project deployment controls |
 | `internal/model` | Launcher state and normalization |
 | `internal/store` | SQLite storage and legacy migration |
 | `internal/platform` | Platform-specific launching and shortcut handling |

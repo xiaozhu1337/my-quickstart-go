@@ -57,6 +57,7 @@ func main() {
 		return
 	}
 	app := launcher.New(state, db)
+	app.SetLibrary(filepath.Join(filepath.Dir(db.Path()), "library"))
 	defer app.Close()
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.OnSecondInstance(func([]string, string) { app.Show() })

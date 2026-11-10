@@ -15,7 +15,7 @@ func (a *App) settingsView(c *ui.Context) {
 		a.text("随时唤起启动器，保持键盘操作流畅。", "Keep your launcher one keystroke away."),
 		a.text("查看程序和依赖库的版本信息。", "View application and dependency versions."),
 	}
-	ui.Column(c).Fill().Children(func() {
+	ui.Column(c).Grow(1).FillWidth().Children(func() {
 		ui.Row(c).Padding(18, 20).Gap(16).Children(func() {
 			if ui.Button(c, a.text("返回启动器", "Back to launcher")).Label(a.text("关闭", "Close")).Height(36).Clicked() {
 				a.settingsOpen = false

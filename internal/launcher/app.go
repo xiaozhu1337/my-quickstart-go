@@ -9,11 +9,14 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"my-quickstart-go/internal/branding"
+	"my-quickstart-go/internal/libraryui"
 	"my-quickstart-go/internal/model"
 	"my-quickstart-go/internal/platform"
 )
 
 type App struct {
+	mainTab          int
+	library          *libraryui.Panel
 	state            model.State
 	saver            *saver
 	window           *mygo.Window
@@ -62,6 +65,8 @@ type App struct {
 	fonts            []string
 }
 
+func (a *App) SetLibrary(root string) { a.library = libraryui.New(root) }
+
 func New(state model.State, p persistence) *App {
 	state.Normalize()
 	a := &App{state: state, selected: 0, sidebar: float32(state.Settings.SidebarWidth),
@@ -92,6 +97,9 @@ func (a *App) Ready() {
 		}
 	}
 	a.window = mygo.NewWindow(opts)
+	if a.library != nil {
+		a.library.Window = a.window
+	}
 	if err := a.window.SetIcon(branding.PNG); err != nil {
 		a.report(fmt.Errorf("%s: %w", a.text("无法设置窗口图标", "Cannot set window icon"), err))
 	}
@@ -141,7 +149,7 @@ func (a *App) Show() {
 			a.window.Restore()
 		}
 		a.window.Focus()
-		if a.searchOpen {
+		if a.searchOpen && a.mainTab == 0 {
 			a.search.Focus()
 		}
 	}
@@ -203,6 +211,11 @@ func (a *App) onClose(e *mygo.CloseEvent) {
 }
 
 func (a *App) BeforeQuit(e *mygo.QuitEvent) {
+	if a.library != nil && a.library.Busy {
+		e.PreventDefault()
+		a.report(errors.New(a.text("资源库正在保存，请完成后再退出", "Library operation in progress; please wait before quitting")))
+		return
+	}
 	a.captureBounds()
 	if a.Flush() != nil {
 		e.PreventDefault()

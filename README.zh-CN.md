@@ -22,6 +22,29 @@
 
 五种主题见 [主题对照图](docs/themes-preview.png)。以上预览使用 MyGo 原生界面测试器与示例数据渲染。
 
+## MCP 与 Skill 资源库
+
+顶部提供“应用启动”和“MCP / Skills”两个标签，切换时保留启动器的搜索与分类状态。资源库默认使用列表，支持名称/说明搜索、类型筛选、每页 40 项、多选和跨页保留选择。
+
+1. 点击“添加 MCP”，填写名称、说明和单个服务的 YAML 配置。支持 `command`、`args`、`env`、`cwd`，或 HTTP 的 `url`、`headers`；可再次编辑配置。
+2. 点击“添加 Skill”，选择含 `SKILL.md` 的目录。文件须包含 `name` 和 `description` frontmatter；目录及附带脚本、参考资料会复制进资源库，不依赖原目录。含软链接的导入目录会被拒绝，单项上限为 100 MiB、10000 个路径。
+3. 勾选 MCP / Skill，选择 `codex` 或 `pi`、项目目录，再点击“链接到项目”。
+
+![MCP 与 Skill 资源库（示例数据）](docs/library-preview.png)
+
+| Agent | MCP 配置软链接 | Skill 目录软链接 |
+| --- | --- | --- |
+| Codex | `.codex/config.toml` | `.agents/skills/<name>` |
+| pi（原生 MCP） | `.pi/mcp.json` | `.pi/skills/<name>` |
+
+资源统一保存在数据库同级的 `library` 目录：`library.yaml` 保存资源信息与 MCP 配置，`skills` 保存导入文件，`projects` 保存每个项目独立的生成配置。库配置采用 YAML；写入 agent 时转换为其要求的 TOML / JSON。
+
+部署按所选条目增量合并，保留未选中的服务及其他配置。第一次接管已有普通配置文件时，原文件完整备份到旁边的 `.quickstart-backup-<id>`；生成文件可能重新排版并移除原注释。遇到不同配置的同名服务、同名 Skill 或其他工具创建的配置链接时停止，不覆盖；写入失败会回滚本次配置与链接。重新部署本应用已管理的条目可以更新它们。编辑 MCP 后需再次链接到目标项目；各项目互不影响。
+
+Windows 创建软链接需要开发者模式或管理员权限，失败会在界面提示。Codex 与 pi 都需要信任项目后才加载项目 MCP 配置；pi 按当前原生 MCP 格式接入，不配置旧版扩展适配器。凭据以明文存放在本地库及生成配置中。从列表移除条目会保留已部署配置和 Skill 文件，使已有项目链接继续可用；不会自动从项目卸载。
+
+实现参考 [magpie 资源库](https://github.com/yetone/magpie)，路径与配置格式按 [Codex MCP 文档](https://developers.openai.com/codex/mcp)、[Codex Skills 文档](https://developers.openai.com/codex/skills) 和 [pi MCP 文档](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/mcp.md) 核对。
+
 ## 直接运行
 
 从 [最新 Release](https://github.com/xiaozhu1337/my-quickstart-go/releases/latest) 下载对应系统和架构的预编译程序，无需安装 Go：
@@ -56,7 +79,7 @@ Windows 双击 exe；macOS 通过 Finder 打开 `.app`；Linux 在桌面会话�
 
 可用 `--data "数据库完整路径"` 指定独立数据库。自定义路径不自动导入旧库；该选项也便于使用数据副本验证。加载错误不会被默认数据覆盖。旧版若仅在 WebView localStorage 中保存过数据，请先运行旧版让其写入 SQLite，再启动新版。
 
-错误异步写入程序所在目录的 `logs/launcher.log`，该目录必须可写。设置和条目保存在 SQLite 中，继续兼容旧表结构；没有新增独立配置文件。
+错误异步写入程序所在目录的 `logs/launcher.log`，该目录必须可写；单文件上限 2 MiB，保留当前日志和两份轮换日志。启动器设置和条目继续保存在 SQLite 中，兼容旧表结构；MCP / Skill 使用独立的 `library` 目录。
 
 ## 开发与构建
 

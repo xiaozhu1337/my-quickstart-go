@@ -16,7 +16,7 @@ func (a *App) view(c *ui.Context) {
 	t.Font = fontName(a.state.Settings.FontFamily)
 	c.SetTheme(t)
 	c.Root().Background(t.Background)
-	if !a.settingsOpen && !a.editorOpen && !a.renameOpen && !a.addOpen {
+	if a.mainTab == 0 && !a.settingsOpen && !a.editorOpen && !a.renameOpen && !a.addOpen {
 		c.OnShortcut(ui.Cmd, ui.KeyF, func() {
 			if a.searchOpen {
 				c.Resolve(a.search).SetTextSelection(0, utf8.RuneCountInString(a.query))
@@ -30,37 +30,48 @@ func (a *App) view(c *ui.Context) {
 			a.filter()
 		})
 	}
-	if a.settingsOpen {
-		a.settingsView(c)
-	} else {
-		ui.Column(c).Fill().Children(func() {
-			if a.searchOpen {
-				ui.Row(c).Padding(18, 20).Children(func() {
-					input := ui.TextInput(c.Key("search"), &a.query).Bind(&a.search).Placeholder(a.text("搜索所有分类…", "Search all groups…")).Label(a.text("搜索", "Search")).Grow(1).Height(38)
-					if input.Changed() {
-						a.filter()
-					}
-					if input.Submitted() && a.selected >= 0 && a.selected < len(a.results) {
-						e := a.results[a.selected]
-						a.deferAction(func() { a.launch(e) })
-					}
-				})
-				ui.Divider(c)
+	ui.Column(c).Fill().Children(func() {
+		ui.Tabs(c, &a.mainTab, a.text("应用启动", "Launcher"), "MCP / Skills").Disabled(a.editorOpen || a.renameOpen || a.addOpen)
+		ui.Divider(c)
+		if a.mainTab == 1 {
+			if a.library != nil {
+				a.library.Language = a.state.Settings.Language
+				a.library.View(c)
+			} else {
+				ui.Text(c, a.text("资源库尚未初始化", "Library is not initialized"))
 			}
-			if ui.Split(c, &a.sidebar, func() { a.sidebarView(c) }, func() {
-				ui.Column(c).Fill().Children(func() {
-					if strings.TrimSpace(a.query) != "" {
-						ui.Text(c, fmt.Sprintf(a.text("搜索结果（%d）", "Search results (%d)"), len(a.results))).FontSize(11).TextColor(t.TextMuted).Padding(12, 20, 0, 20)
-					}
-					a.gridView(c)
-				})
-			}).Grow(1).Changed() {
-				a.state.Settings.SidebarWidth = float64(a.sidebar)
-				a.changed()
-			}
-			a.statusView(c)
-		})
-	}
+		} else if a.settingsOpen {
+			a.settingsView(c)
+		} else {
+			ui.Column(c).Grow(1).FillWidth().Children(func() {
+				if a.searchOpen {
+					ui.Row(c).Padding(18, 20).Children(func() {
+						input := ui.TextInput(c.Key("search"), &a.query).Bind(&a.search).Placeholder(a.text("搜索所有分类…", "Search all groups…")).Label(a.text("搜索", "Search")).Grow(1).Height(38)
+						if input.Changed() {
+							a.filter()
+						}
+						if input.Submitted() && a.selected >= 0 && a.selected < len(a.results) {
+							e := a.results[a.selected]
+							a.deferAction(func() { a.launch(e) })
+						}
+					})
+					ui.Divider(c)
+				}
+				if ui.Split(c, &a.sidebar, func() { a.sidebarView(c) }, func() {
+					ui.Column(c).Fill().Children(func() {
+						if strings.TrimSpace(a.query) != "" {
+							ui.Text(c, fmt.Sprintf(a.text("搜索结果（%d）", "Search results (%d)"), len(a.results))).FontSize(11).TextColor(t.TextMuted).Padding(12, 20, 0, 20)
+						}
+						a.gridView(c)
+					})
+				}).Grow(1).Changed() {
+					a.state.Settings.SidebarWidth = float64(a.sidebar)
+					a.changed()
+				}
+				a.statusView(c)
+			})
+		}
+	})
 
 	a.editorView(c)
 	a.renameView(c)

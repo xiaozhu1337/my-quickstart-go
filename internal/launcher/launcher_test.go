@@ -197,3 +197,27 @@ func TestContextualSearchAndMessages(t *testing.T) {
 		}
 	}
 }
+
+func TestMainTabsPreserveLauncherState(t *testing.T) {
+	a := fixture()
+	a.SetLibrary(t.TempDir())
+	tt := ui.NewTester(a.view, 960, 620)
+	tt.Key(ui.Cmd, ui.KeyF)
+	tt.Type("beta")
+	if err := tt.Click("MCP / Skills"); err != nil {
+		t.Fatal(err)
+	}
+	if !tt.HasText("Library") || tt.HasText("Beta Tool") {
+		t.Fatal("library tab did not replace launcher view")
+	}
+	tt.Key(0, ui.KeyEscape)
+	if a.query != "beta" {
+		t.Fatal("launcher shortcuts leaked into library")
+	}
+	if err := tt.Click("Launcher"); err != nil {
+		t.Fatal(err)
+	}
+	if !tt.HasText("Beta Tool") || a.query != "beta" {
+		t.Fatal("switching tabs lost launcher state")
+	}
+}
