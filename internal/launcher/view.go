@@ -31,17 +31,42 @@ func (a *App) view(c *ui.Context) {
 		})
 	}
 	ui.Column(c).Fill().Children(func() {
-		ui.Tabs(c, &a.mainTab, a.text("应用启动", "Launcher"), "MCP / Skills").Disabled(a.editorOpen || a.renameOpen || a.addOpen)
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+			disabled := a.editorOpen || a.renameOpen || a.addOpen
+			selected := a.mainTab
+			if a.settingsOpen {
+				for i, label := range []string{a.text("应用启动", "Launcher"), "MCP / Skills"} {
+					button := ui.ButtonBase(c.Key("settings-return-"+label)).Padding(10, 12).Label(label).Disabled(disabled)
+					button.Children(func() { ui.Text(c, label).TextColor(t.TextMuted) })
+					if button.Clicked() {
+						a.mainTab, a.settingsOpen = i, false
+					}
+				}
+			} else if ui.Tabs(c, &selected, a.text("应用启动", "Launcher"), "MCP / Skills").Disabled(disabled).Changed() {
+				a.mainTab, a.settingsOpen = selected, false
+			}
+			ui.Box(c).Grow(1)
+			button := ui.Button(c, a.text("设置", "Settings")).Margin(0, 12).Disabled(disabled)
+			if a.settingsOpen {
+				button.Background(t.Accent.Alpha(0.14))
+			}
+			if button.Clicked() {
+				a.openSettings()
+			}
+		})
 		ui.Divider(c)
-		if a.mainTab == 1 {
+		if a.library != nil {
+			a.library.Language = a.state.Settings.Language
+		}
+		if a.settingsOpen {
+			a.settingsView(c)
+		} else if a.mainTab == 1 {
 			if a.library != nil {
 				a.library.Language = a.state.Settings.Language
 				a.library.View(c)
 			} else {
 				ui.Text(c, a.text("资源库尚未初始化", "Library is not initialized"))
 			}
-		} else if a.settingsOpen {
-			a.settingsView(c)
 		} else {
 			ui.Column(c).Grow(1).FillWidth().Children(func() {
 				if a.searchOpen {
@@ -178,10 +203,6 @@ func (a *App) sidebarView(c *ui.Context) {
 				a.importPaths(paths, g.ID, "")
 			}
 		}).Grow(1)
-		ui.Divider(c).Margin(4, 0)
-		if ui.Button(c, a.text("设置", "Settings")).WidthPercent(100).Height(34).Clicked() {
-			a.openSettings()
-		}
 	})
 }
 

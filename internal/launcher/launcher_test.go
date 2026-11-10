@@ -1,6 +1,9 @@
 package launcher
 
 import (
+	"image/png"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -207,7 +210,7 @@ func TestMainTabsPreserveLauncherState(t *testing.T) {
 	if err := tt.Click("MCP / Skills"); err != nil {
 		t.Fatal(err)
 	}
-	if !tt.HasText("Library") || tt.HasText("Beta Tool") {
+	if !tt.HasText("Add MCP") || tt.HasText("Beta Tool") || tt.HasText("Library") {
 		t.Fatal("library tab did not replace launcher view")
 	}
 	tt.Key(0, ui.KeyEscape)
@@ -219,5 +222,70 @@ func TestMainTabsPreserveLauncherState(t *testing.T) {
 	}
 	if !tt.HasText("Beta Tool") || a.query != "beta" {
 		t.Fatal("switching tabs lost launcher state")
+	}
+}
+
+func TestGlobalSettingsAndMagpieImport(t *testing.T) {
+	for _, width := range []int{560, 1100} {
+		root := t.TempDir()
+		t.Setenv("XDG_CONFIG_HOME", root)
+		if err := os.Mkdir(filepath.Join(root, "magpie"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "magpie", "library.json"), []byte(`{"mcp":[{"name":"imported-tools","command":"test-tool"}],"skills":[]}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+		a := fixture()
+		a.state.Settings.Language = "zh-CN"
+		a.SetLibrary(filepath.Join(root, "resources"))
+		tt := ui.NewTester(a.view, width, 680)
+		r, ok := tt.Find("设置")
+		if !ok || r.X < float32(width-130) || r.Y > 50 {
+			t.Fatal("settings is not at the top right", r)
+		}
+		if err := tt.Click("MCP / Skills"); err != nil {
+			t.Fatal(err)
+		}
+		if err := tt.Click("设置"); err != nil {
+			t.Fatal(err)
+		}
+		chooseSettings(t, tt, a, width, 680, "资源导入")
+		if err := tt.Click("从 magpie 导入 MCP 和 Skill"); err != nil {
+			t.Fatal(err)
+		}
+		if !tt.HasText("已导入 1 个 MCP、0 个 Skill；跳过 0 项，失败 0 项。") {
+			t.Fatal(tt.Texts())
+		}
+		if destination := os.Getenv("QUICKSTART_SETTINGS_PREVIEW"); destination != "" && width == 1100 {
+			f, err := os.Create(destination)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = png.Encode(f, tt.Image())
+			f.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := tt.Click("关闭"); err != nil {
+			t.Fatal(err)
+		}
+		if a.settingsOpen || a.mainTab != 1 || !tt.HasText("imported-tools") {
+			t.Fatal("settings return lost tab or import")
+		}
+		if tt.HasText("资源库") {
+			t.Fatal("large title is still visible")
+		}
+		for _, label := range []string{"MCP / Skills", "应用启动"} {
+			if err := tt.Click("设置"); err != nil {
+				t.Fatal(err)
+			}
+			if err := tt.Click(label); err != nil {
+				t.Fatal(err)
+			}
+			if a.settingsOpen {
+				t.Fatal("tab click did not leave settings")
+			}
+		}
 	}
 }

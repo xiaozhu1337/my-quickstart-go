@@ -62,15 +62,11 @@ func TestNativeThemeSettings(t *testing.T) {
 					t.Fatalf("theme %s was not applied", theme.id)
 				}
 			}
-			if err := tt.Click("Hotkey"); err != nil {
-				t.Fatal(err)
-			}
+			chooseSettings(t, tt, a, size.width, size.height, "Hotkey")
 			if !tt.HasText("Apply shortcut") {
 				t.Fatal("hotkey controls are missing")
 			}
-			if err := tt.Click("Behavior"); err != nil {
-				t.Fatal(err)
-			}
+			chooseSettings(t, tt, a, size.width, size.height, "Behavior")
 			if err := tt.Click("Always on top"); err != nil {
 				t.Fatal(err)
 			}
@@ -91,5 +87,19 @@ func TestNativeThemeSettings(t *testing.T) {
 				t.Fatal("theme must survive leaving settings")
 			}
 		})
+	}
+}
+
+func chooseSettings(t *testing.T, tt *ui.Tester, a *App, width, height int, label string) {
+	t.Helper()
+	if width < 760 {
+		if err := tt.Click(a.text("设置分类", "Settings category")); err != nil {
+			t.Fatal(err)
+		}
+	} else if r, ok := tt.Find(label); ok && r.Y+r.H > float32(height) {
+		tt.Scroll(100, float32(height-40), 0, 600)
+	}
+	if err := tt.Click(label); err != nil {
+		t.Fatal(err)
 	}
 }

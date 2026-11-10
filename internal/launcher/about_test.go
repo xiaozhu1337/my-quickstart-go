@@ -24,9 +24,7 @@ func TestAboutSettings(t *testing.T) {
 			if err := tt.Click(a.text("设置", "Settings")); err != nil {
 				t.Fatal(err)
 			}
-			if err := tt.Click(a.text("关于", "About")); err != nil {
-				t.Fatalf("%s width %d: %v", language, width, err)
-			}
+			chooseSettings(t, tt, a, width, 380, a.text("关于", "About"))
 			for _, text := range []string{"My Quickstart Go", buildinfo.Version, runtime.Version(), "github.com/egoist/mygo", "v0.7.1", "modernc.org/sqlite", "v1.60.1"} {
 				if !tt.HasText(text) {
 					t.Fatalf("%s width %d: missing %q in %q", language, width, text, tt.Texts())

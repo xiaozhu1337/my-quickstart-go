@@ -7,17 +7,18 @@ import (
 
 func (a *App) settingsView(c *ui.Context) {
 	width, _ := c.Size()
-	labels := []string{a.text("外观", "Appearance"), a.text("布局", "Layout"), a.text("行为", "Behavior"), a.text("快捷键", "Hotkey"), a.text("关于", "About")}
+	labels := []string{a.text("外观", "Appearance"), a.text("布局", "Layout"), a.text("行为", "Behavior"), a.text("快捷键", "Hotkey"), a.text("关于", "About"), a.text("资源导入", "Resource import")}
 	descriptions := []string{
 		a.text("让启动器更符合你的使用习惯。", "Make your launcher feel at home."),
 		a.text("调整应用卡片和分类栏的显示密度。", "Find the right density for your shortcuts."),
 		a.text("选择窗口、启动和文件路径的工作方式。", "Choose how the window and file paths behave."),
 		a.text("随时唤起启动器，保持键盘操作流畅。", "Keep your launcher one keystroke away."),
 		a.text("查看程序和依赖库的版本信息。", "View application and dependency versions."),
+		a.text("管理资源导入与迁移。", "Import and migrate reusable resources."),
 	}
 	ui.Column(c).Grow(1).FillWidth().Children(func() {
 		ui.Row(c).Padding(18, 20).Gap(16).Children(func() {
-			if ui.Button(c, a.text("返回启动器", "Back to launcher")).Label(a.text("关闭", "Close")).Height(36).Clicked() {
+			if ui.Button(c, a.text("返回", "Back")).Label(a.text("关闭", "Close")).Height(36).Clicked() {
 				a.settingsOpen = false
 			}
 			ui.Text(c, a.text("设置", "Settings")).FontSize(20).Bold().Grow(1)
@@ -25,21 +26,44 @@ func (a *App) settingsView(c *ui.Context) {
 		})
 		ui.Divider(c)
 		if width < 760 {
-			ui.Tabs(c, &a.settingsTab, labels...).Padding(12, 20, 0, 20)
+			selected := labels[a.settingsTab]
+			if ui.Select(c, &selected, labels).Label(a.text("设置分类", "Settings category")).Margin(12, 20).Changed() {
+				for i, label := range labels {
+					if label == selected {
+						a.settingsTab = i
+					}
+				}
+			}
 		}
 		ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 			if width >= 760 {
-				ui.Column(c).Width(176).Padding(16, 12).Gap(6).Background(c.Theme().Surface.Alpha(0.5)).Children(func() {
-					ui.Text(c, a.text("偏好设置", "PREFERENCES")).FontSize(10).Bold().TextColor(c.Theme().TextMuted).Padding(8)
-					for i, label := range labels {
-						button := ui.Button(c.Key(label), label).Height(40).Label(label)
-						if a.settingsTab == i {
-							button.Background(c.Theme().Accent.Alpha(0.14)).Border(1, c.Theme().Accent.Alpha(0.25))
+				ui.Scroll(c).Width(176).Children(func() {
+					ui.Column(c).Width(176).Padding(16, 12).Gap(6).Background(c.Theme().Surface.Alpha(0.5)).Children(func() {
+						for _, i := range []int{0, 1, 2, 3, 5, 4} {
+							group := ""
+							switch i {
+							case 0:
+								group = a.text("通用", "GENERAL")
+							case 1:
+								group = a.text("应用启动", "LAUNCHER")
+							case 5:
+								group = a.text("资源管理", "RESOURCES")
+							case 4:
+								group = a.text("应用信息", "INFORMATION")
+							}
+							if group != "" {
+								ui.Text(c, group).FontSize(10).Bold().TextColor(c.Theme().TextMuted).Padding(8)
+							}
+							label := labels[i]
+							button := ui.Button(c.Key(label), label).Height(40).Label(label)
+							if a.settingsTab == i {
+								button.Background(c.Theme().Accent.Alpha(0.14)).Border(1, c.Theme().Accent.Alpha(0.25))
+							}
+							if button.Clicked() {
+								a.settingsTab = i
+							}
 						}
-						if button.Clicked() {
-							a.settingsTab = i
-						}
-					}
+					})
 				})
 			}
 			ui.Scroll(c.Key(a.settingsTab)).Grow(1).Children(func() {
@@ -59,6 +83,10 @@ func (a *App) settingsView(c *ui.Context) {
 						a.hotkeySettings(c)
 					case 4:
 						a.aboutSettings(c)
+					case 5:
+						if a.library != nil {
+							a.library.SettingsView(c)
+						}
 					}
 				})
 			})

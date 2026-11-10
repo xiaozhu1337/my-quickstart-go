@@ -24,10 +24,13 @@ type Panel struct {
 	list                                      ui.ListState
 	editOpen, skillOpen, removeOpen           bool
 	editID, name, description, config, source string
+	magpieSource                              string
+	importReport                              *library.ImportReport
+	importPage                                int
 }
 
 func New(root string) *Panel {
-	p := &Panel{selected: map[string]bool{}, agent: "codex"}
+	p := &Panel{selected: map[string]bool{}, agent: "codex", magpieSource: library.DefaultMagpiePath()}
 	var err error
 	p.store, err = library.Open(root)
 	if err == nil {
@@ -150,7 +153,7 @@ func (p *Panel) pick(skill bool) {
 func (p *Panel) View(c *ui.Context) {
 	ui.Column(c).Grow(1).FillWidth().Padding(16).Gap(10).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, p.tr("资源库", "Library")).FontSize(22).Bold().Grow(1)
+			ui.Box(c).Grow(1)
 			if ui.Button(c, p.tr("添加 MCP", "Add MCP")).Disabled(p.Busy || p.store == nil).Clicked() {
 				p.edit(library.Item{})
 			}

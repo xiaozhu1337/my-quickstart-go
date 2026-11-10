@@ -70,6 +70,14 @@ func TestAddSelectDeployAndReload(t *testing.T) {
 	if len(New(root).items) != 1 {
 		t.Fatal("saved resource was not reloaded")
 	}
+	click(t, tt, "编辑")
+	click(t, tt, "MCP 名称")
+	tt.Key(ui.Cmd, ui.KeyA)
+	tt.Type("renamed-tools")
+	click(t, tt, "保存")
+	if p.failure != "" || p.items[0].Name != "renamed-tools" || len(p.ids()) != 1 {
+		t.Fatal("rename failed or lost selection", p.failure)
+	}
 	click(t, tt, "从库移除")
 	click(t, tt, "取消")
 	if len(p.items) != 1 {
@@ -135,7 +143,16 @@ func TestLibraryPreview(t *testing.T) {
 	p.selected[p.items[3].ID] = true
 	p.project = "C:/Users/Administrator/code/my-project"
 	tt := ui.NewTester(func(c *ui.Context) {
-		ui.Column(c).Fill().Children(func() { tab := 1; ui.Tabs(c, &tab, "应用启动", "MCP / Skills"); ui.Divider(c); p.View(c) })
+		ui.Column(c).Fill().Children(func() {
+			ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+				tab := 1
+				ui.Tabs(c, &tab, "应用启动", "MCP / Skills")
+				ui.Box(c).Grow(1)
+				ui.Button(c, "设置").Margin(0, 12)
+			})
+			ui.Divider(c)
+			p.View(c)
+		})
 	}, 1100, 680)
 	f, err := os.Create(destination)
 	if err != nil {

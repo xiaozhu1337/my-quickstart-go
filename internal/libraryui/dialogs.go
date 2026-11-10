@@ -12,8 +12,8 @@ func (p *Panel) dialogs(c *ui.Context) {
 		ui.Text(c, p.tr("保存 MCP 到资源库", "Save MCP to library")).FontSize(20).Bold()
 		ui.Scroll(c).Grow(1).FillWidth().Children(func() {
 			ui.Column(c).FillWidth().Gap(8).Children(func() {
-				ui.Text(c, p.tr("名称（保存后不可更改）", "Name (fixed after saving)"))
-				ui.TextInput(c.Key("mcp-name"), &p.name).Label(p.tr("MCP 名称", "MCP name")).Disabled(p.Busy || p.editID != "").AutoFocus()
+				ui.Text(c, p.tr("名称", "Name"))
+				ui.TextInput(c.Key("mcp-name"), &p.name).Label(p.tr("MCP 名称", "MCP name")).Disabled(p.Busy).AutoFocus()
 				ui.Text(c, p.tr("说明", "Description"))
 				ui.TextInput(c.Key("mcp-description"), &p.description).Label(p.tr("MCP 说明", "MCP description")).Disabled(p.Busy)
 				ui.Text(c, p.tr("配置（YAML）：command / args / env / cwd 或 url / headers", "YAML config: command / args / env / cwd OR url / headers")).FontSize(12)

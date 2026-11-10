@@ -15,9 +15,9 @@ A native desktop launcher for **Windows, macOS, and Linux**, built in Go with [M
 - **Desktop integration:** tray controls, a global show/hide shortcut, always-on-top mode, hidden startup, remembered window bounds, and paths relative to the executable. Windows supports `.lnk` resolution and UWP entries; other platforms use their own application lists and launch mechanisms.
 - **Local persistence:** SQLite storage with transactional saves, legacy data migration, and protection against replacing unreadable data with an empty state.
 
-Right-click empty space in the card grid to add entries. Right-click empty space in the sidebar to add a group, or right-click a group to rename or remove it. The bottom-left corner contains only Settings.
+Right-click empty space in the card grid to add entries. Right-click empty space in the sidebar to add a group, or right-click a group to rename or remove it. Settings is at the far right of the top tab bar, available from both tabs.
 
-Settings has five sections: **Appearance, Layout, Behavior, Hotkey, and About**. About shows the application version, Go version, platform, and the dependency versions embedded in the executable. Wide windows use a sidebar; narrow windows use tabs. Changes save automatically, except the global hotkey, which needs **Apply** to validate registration. The entry editor adapts to smaller windows while keeping its save button visible.
+Settings groups **Appearance** under General; **Layout, Behavior, and Hotkey** under Launcher; **Resource import** under Resources; and **About** under Information. About shows the application version, Go version, platform, and the dependency versions embedded in the executable. Wide windows use a scrollable sidebar; narrow windows use a category selector. Changes save automatically, except the global hotkey, which needs **Apply** to validate registration. The entry editor adapts to smaller windows while keeping its save button visible.
 
 ![Settings](docs/settings-preview.png)
 
@@ -30,6 +30,10 @@ The top tabs switch between **Launcher** and **MCP / Skills**, preserving launch
 Use **Add MCP** to save a named server with YAML fields `command`, `args`, `env`, `cwd`, or HTTP `url` and `headers`. Use **Add Skill** to import a directory containing `SKILL.md` with `name` and `description` frontmatter. Supporting scripts and references are copied into the library. Imports containing symlinks are rejected; each import is limited to 100 MiB and 10,000 paths.
 
 Select resources, choose **codex** or **pi**, select a project directory, and click **Link to project**.
+
+MCP names can be edited after saving. Linking a renamed resource again replaces its previously managed name in that project, while preserving other servers. Duplicate resource names remain disallowed.
+
+To migrate existing resources, open **Settings → Resources → Resource import → Import MCPs and skills from magpie**. The default source is `~/.config/magpie` (or `$XDG_CONFIG_HOME/magpie`); portable installations can use the install folder or its `data` folder. Import copies standard stdio/HTTP MCP definitions, notes, and complete local skill folders, including skills whose root directory is a symlink. Existing same-kind names are skipped, and invalid or unsupported entries are reported individually. SSE and servers with disabled-tool/startup-timeout overrides are reported as unsupported. Magpie's own configuration and files are not changed; agent assignments, OAuth sessions, and plugin runtime state are not migrated. Importing does not deploy resources to a project.
 
 ![MCP and skill library with sample data](docs/library-preview.png)
 

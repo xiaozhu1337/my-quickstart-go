@@ -339,6 +339,13 @@ func mergeConfig(data []byte, agent string, items []Item, manifest *Deployment) 
 				return nil, fmt.Errorf("MCP 同名冲突，未覆盖: %s", i.Name)
 			}
 		}
+		// A resource keeps its ID through renames. Retire only names owned by it.
+		for oldName, id := range manifest.Managed {
+			if id == i.ID && oldName != i.Name {
+				delete(servers, oldName)
+				delete(manifest.Managed, oldName)
+			}
+		}
 		servers[i.Name] = entry
 		manifest.Managed[i.Name] = i.ID
 	}

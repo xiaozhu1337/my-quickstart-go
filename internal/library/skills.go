@@ -15,6 +15,10 @@ import (
 func (l *Library) ImportSkill(source string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	return l.importSkill(source, "", "")
+}
+
+func (l *Library) importSkill(source, name, note string) error {
 	source, err := filepath.Abs(strings.TrimSpace(source))
 	if err != nil {
 		return err
@@ -48,6 +52,26 @@ func (l *Library) ImportSkill(source string) error {
 	}
 	if err = yaml.Unmarshal([]byte(text[4:4+end]), &meta); err != nil {
 		return err
+	}
+	if strings.TrimSpace(meta.Description) == "" {
+		return errors.New("SKILL.md 须包含有效的 description")
+	}
+	if name != "" {
+		// Magpie can keep a skill under a different library name.
+		var front map[string]any
+		if err = yaml.Unmarshal([]byte(text[4:4+end]), &front); err != nil {
+			return err
+		}
+		front["name"] = name
+		raw, e := yaml.Marshal(front)
+		if e != nil {
+			return e
+		}
+		b = []byte("---\n" + string(raw) + text[4+end+1:])
+		meta.Name = name
+	}
+	if note != "" {
+		meta.Description = strings.TrimSpace(meta.Description + "\n" + note)
 	}
 	if !safeName.MatchString(meta.Name) || strings.TrimSpace(meta.Description) == "" {
 		return errors.New("SKILL.md 须包含有效的 name 和 description")
@@ -119,6 +143,9 @@ func (l *Library) ImportSkill(source string) error {
 		} else {
 			var raw []byte
 			raw, e = os.ReadFile(path)
+			if r == "SKILL.md" && name != "" {
+				raw = b
+			}
 			if e == nil {
 				e = os.WriteFile(target, raw, info.Mode().Perm())
 			}

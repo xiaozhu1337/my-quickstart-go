@@ -161,6 +161,10 @@ func (l *Library) SaveMCP(id, name, description, config string) error {
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	return l.saveMCP(id, name, description, s)
+}
+
+func (l *Library) saveMCP(id, name, description string, s *Server) error {
 	items, err := l.read()
 	if err != nil {
 		return err
@@ -173,8 +177,8 @@ func (l *Library) SaveMCP(id, name, description, config string) error {
 	for n, old := range items {
 		if old.ID == id {
 			index = n
-			if old.Kind != "mcp" || old.Name != i.Name {
-				return errors.New("已保存 MCP 的名称不可更改，请添加新条目")
+			if old.Kind != "mcp" {
+				return errors.New("资源不是 MCP")
 			}
 		}
 		if old.ID != id && old.Kind == "mcp" && strings.EqualFold(old.Name, i.Name) {
