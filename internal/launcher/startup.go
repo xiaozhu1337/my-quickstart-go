@@ -66,3 +66,35 @@ func (a *App) prepareWindow() {
 		log.Printf("prepare window: %v", err)
 	}
 }
+
+// startHiddenReturn is called on the UI thread only after the window hides.
+// dispatch marshals timer callbacks back to that same thread.
+func (a *App) startHiddenReturn(dispatch func(func())) {
+	if a.quitting || !a.hiddenReturnDeadline.IsZero() || (a.mainTab == 0 && !a.settingsOpen) {
+		return
+	}
+	delay := time.Duration(a.state.Settings.ReturnToLauncherSeconds) * time.Second
+	a.hiddenReturnDeadline = time.Now().Add(delay)
+	a.hiddenReturnGeneration++
+	generation := a.hiddenReturnGeneration
+	a.hiddenReturnTimer = time.AfterFunc(delay, func() {
+		dispatch(func() { a.finishHiddenReturn(generation, time.Now()) })
+	})
+}
+
+func (a *App) cancelHiddenReturn() {
+	if a.hiddenReturnTimer != nil {
+		a.hiddenReturnTimer.Stop()
+		a.hiddenReturnTimer = nil
+	}
+	a.hiddenReturnDeadline = time.Time{}
+	a.hiddenReturnGeneration++
+}
+
+func (a *App) finishHiddenReturn(generation uint64, now time.Time) {
+	if a.quitting || generation != a.hiddenReturnGeneration || a.hiddenReturnDeadline.IsZero() || now.Before(a.hiddenReturnDeadline) {
+		return
+	}
+	a.cancelHiddenReturn()
+	a.mainTab, a.settingsOpen = 0, false
+}

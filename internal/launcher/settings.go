@@ -189,6 +189,11 @@ func (a *App) behaviorSettings(c *ui.Context) {
 			a.window.SetAlwaysOnTop(s.AlwaysOnTop)
 		}
 		a.settingToggle(c, a.text("双击卡片区域空白处隐藏", "Hide on double click in empty grid space"), a.text("有托盘或全局快捷键时可隐藏窗口。", "Hiding requires a tray or a global shortcut."), &s.DblClickBlankToHide)
+		a.settingRow(c, a.text("隐藏后返回应用启动（秒）", "Return to launcher after hiding (seconds)"), a.text("在其他页面隐藏后开始计时；提前打开保留原页面。范围 1–3600 秒。", "Start counting when hidden on another page; reopen early to keep that page. Range: 1–3600 seconds."), func() {
+			if ui.NumberInput(c, &s.ReturnToLauncherSeconds, 1, 3600, 1).Label(a.text("自动返回等待秒数", "Return delay in seconds")).Width(160).Changed() {
+				a.changed()
+			}
+		})
 		if a.settingToggle(c, a.text("记住窗口位置和大小", "Remember window position and size"), a.text("下次启动恢复窗口的位置和尺寸。", "Restore the window bounds on the next launch."), &s.RememberWindowBounds) {
 			a.captureBounds()
 		}

@@ -22,6 +22,7 @@ func sampleState() model.State {
 	s.ActiveGroupID = "group-two"
 	s.Settings.AlwaysOnTop = false
 	s.Settings.DblClickBlankToHide = false
+	s.Settings.ReturnToLauncherSeconds = 27
 	s.Settings.WindowBounds = &model.Bounds{X: -30, Y: 20, Width: 800, Height: 600}
 	return s
 }
@@ -161,6 +162,9 @@ func TestLegacySQLiteAndMigration(t *testing.T) {
 			}
 			if want.Settings.CardWidth != 132 || want.Settings.AlwaysOnTop || !want.Settings.DblClickBlankToHide || want.Settings.FontFamily != model.Default().Settings.FontFamily {
 				t.Fatalf("defaults/alias lost: %+v", want.Settings)
+			}
+			if want.Settings.ReturnToLauncherSeconds != 10 {
+				t.Fatal("legacy settings must default to a 10-second return delay")
 			}
 			if optional && !reflect.DeepEqual(want.Groups[0].Apps[0].EnvVars, []string{"OLD=1"}) {
 				t.Fatal("environment lost")

@@ -50,6 +50,9 @@ type Settings struct {
 	UseRelativePath      bool    `json:"useRelativePath" yaml:"useRelativePath"`
 	RememberWindowBounds bool    `json:"rememberWindowBounds" yaml:"rememberWindowBounds"`
 	WindowBounds         *Bounds `json:"windowBounds" yaml:"windowBounds"`
+
+	// ReturnToLauncherSeconds is the hidden-window delay before returning to the launcher (1-3600 seconds).
+	ReturnToLauncherSeconds float64 `json:"returnToLauncherSeconds" yaml:"returnToLauncherSeconds"`
 }
 
 type State struct {
@@ -74,7 +77,7 @@ func Default() State {
 	return State{Version: 1, ActiveGroupID: g.ID, Groups: []Group{g, {ID: ID(), Name: "reverse", Apps: []Entry{}}, {ID: ID(), Name: "pentest", Apps: []Entry{}}}, Settings: Settings{
 		Language: DefaultLanguage, CardWidth: 120, CardHeight: 96, Theme: "dark", SidebarWidth: 140,
 		FontFamily: "maye", FontSize: 13, CardFontSize: 11, CardIconScale: 56,
-		DblClickBlankToHide: true, AlwaysOnTop: true,
+		DblClickBlankToHide: true, AlwaysOnTop: true, ReturnToLauncherSeconds: 10,
 	}}
 }
 
@@ -93,6 +96,7 @@ func (s *State) Normalize() {
 	v.CardHeight = clamp(v.CardHeight, 40, 360, 96)
 	v.SidebarWidth = clamp(v.SidebarWidth, 90, 320, 140)
 	v.FontSize = clamp(v.FontSize, 10, 22, 13)
+	v.ReturnToLauncherSeconds = clamp(v.ReturnToLauncherSeconds, 1, 3600, 10)
 	v.CardFontSize = clamp(v.CardFontSize, 9, 18, 11)
 	v.CardIconScale = clamp(v.CardIconScale, 16, math.Round(min(v.CardWidth, v.CardHeight)*0.82), 56)
 	if strings.TrimSpace(v.FontFamily) == "" {

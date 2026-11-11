@@ -24,6 +24,7 @@
 | 中英文、深浅主题、字体、字体大小 | 保留；扩展石墨、纸白、午夜、松林、玫瑰五种主题，点击预览即时应用并自动保存 | `internal/launcher/settings.go`、`theme.go`、`view.go` |
 | 侧栏、卡片宽高、卡片字号、图标大小 | 即时调整及持久化，保留旧范围约束 | `internal/launcher/settings.go`、`internal/model/state.go` |
 | 空白双击隐藏、置顶、启动时隐藏、窗口位置大小 | 保留；恢复时增加屏幕可见性检查 | `internal/launcher/app.go`、`settings.go` |
+| 隐藏后自动返回应用启动 | 设置页或 MCP / Skills 页隐藏后默认 10 秒返回应用启动；提前打开取消，下一次隐藏重新计时；设置 → 行为可调整为 1–3600 秒并自动保存 | `internal/launcher/startup.go`、`settings.go`、`internal/model/state.go` |
 | 全局显示/隐藏热键、最小化恢复、热键失败保留旧值 | 使用 MyGo 全局快捷键接口 | `internal/launcher/app.go` |
 | 托盘显示/隐藏、退出；普通 X 隐藏 | 退出先保存；无托盘和热键时拒绝隐藏 | `internal/launcher/app.go`、`cmd/quickstart/main.go` |
 | 应用图标 | 统一蓝色四格标识；运行时全局/窗口 PNG，Windows 内嵌七档 ICO 资源，macOS 应用包 ICNS | `internal/branding`、`internal/launcher/app.go`、`scripts/build.py` |

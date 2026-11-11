@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -63,6 +64,10 @@ type App struct {
 	busy             bool
 	quitting         bool
 	fonts            []string
+
+	hiddenReturnTimer      *time.Timer
+	hiddenReturnDeadline   time.Time
+	hiddenReturnGeneration uint64
 }
 
 func (a *App) SetLibrary(root string) { a.library = libraryui.New(root) }
@@ -104,6 +109,8 @@ func (a *App) Ready() {
 		a.report(fmt.Errorf("%s: %w", a.text("无法设置窗口图标", "Cannot set window icon"), err))
 	}
 	a.window.OnClose(a.onClose)
+	a.window.OnHide(func() { a.startHiddenReturn(a.window.Update) })
+	a.window.OnShow(a.cancelHiddenReturn)
 	a.window.OnResize(a.captureBounds)
 	a.window.OnMove(a.captureBounds)
 	mygo.App.SetLanguages(a.state.Settings.Language)
@@ -138,6 +145,10 @@ func (a *App) Ready() {
 }
 
 func (a *App) Show() {
+	// Apply an elapsed deadline before preparing the first visible frame, even
+	// when the timer callback is still queued on the UI thread.
+	a.finishHiddenReturn(a.hiddenReturnGeneration, time.Now())
+	a.cancelHiddenReturn()
 	if a.warming {
 		a.showPending = true
 		return
@@ -222,6 +233,7 @@ func (a *App) BeforeQuit(e *mygo.QuitEvent) {
 		return
 	}
 	a.quitting = true
+	a.cancelHiddenReturn()
 }
 
 func (a *App) Flush() error {
@@ -239,6 +251,7 @@ func (a *App) Flush() error {
 	return err
 }
 func (a *App) Close() {
+	a.cancelHiddenReturn()
 	if a.saver != nil {
 		close(a.saver.stop)
 		<-a.saver.done
