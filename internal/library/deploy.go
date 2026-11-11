@@ -223,16 +223,13 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 			skillHashes[i.ID] = digest
 			path := filepath.Join(project, skillRel, i.Name)
 			if info, e := os.Lstat(path); e == nil && !linkedTo(path, target) {
-				owned, ok := manifest.Skills[i.Name]
-				if !info.IsDir() || !ok || owned.ID != i.ID {
-					return result, fmt.Errorf("Skill 同名冲突，未覆盖: %s", path)
+				if !info.IsDir() {
+					return result, fmt.Errorf("项目 Skill 不是普通目录: %s", path)
 				}
-				_, digest, e := skillInventory(path)
-				if e != nil {
+				// Validate cleanup before replacing any selected resources. Existing
+				// directories are replaced regardless of ownership or local edits.
+				if _, _, e := skillInventory(path); e != nil {
 					return result, e
-				}
-				if digest != owned.Hash {
-					return result, fmt.Errorf("项目 Skill 已修改，未覆盖: %s", path)
 				}
 			} else if e != nil && !errors.Is(e, os.ErrNotExist) {
 				return result, e

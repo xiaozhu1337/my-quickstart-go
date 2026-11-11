@@ -172,14 +172,6 @@ func TestConflictsAndInvalidConfigDoNotModifyProject(t *testing.T) {
 			t.Fatal("partial skill deployment")
 		}
 	}
-	l, project, ids := fixture(t)
-	write(t, filepath.Join(project, ".pi", "skills", "sample-skill", "SKILL.md"), "user skill")
-	if _, err := l.Deploy(project, "pi", ids); err == nil {
-		t.Fatal("expected skill conflict")
-	}
-	if _, err := os.Lstat(filepath.Join(project, ".pi", "mcp.json")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("partial MCP deployment")
-	}
 }
 
 func TestCopyFailureRollsBackConfigAndManifest(t *testing.T) {

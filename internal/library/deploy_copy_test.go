@@ -2,9 +2,9 @@ package library
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"go.yaml.in/yaml/v3"
@@ -79,11 +79,16 @@ func TestSkillCopiesAreIndependentAndRefresh(t *testing.T) {
 			if read(t, filepath.Join(source, "references", "guide.md")) != "updated library" {
 				t.Fatal("project edit modified library")
 			}
-			if _, err := l.Deploy(project, agent, ids); err == nil || !strings.Contains(err.Error(), "已修改") {
-				t.Fatal("local edit was not protected", err)
+			obsolete := filepath.Join(project, rel, "local-only", "old.txt")
+			write(t, obsolete, "local asset")
+			if _, err := l.Deploy(project, agent, ids); err != nil {
+				t.Fatal("modified skill was not replaced", err)
 			}
-			if read(t, guide) != "local edit" {
-				t.Fatal("local edit lost")
+			if read(t, guide) != "updated library" {
+				t.Fatal("local edit survived replacement")
+			}
+			if _, err := os.Lstat(filepath.Dir(obsolete)); !errors.Is(err, os.ErrNotExist) {
+				t.Fatal("local-only directory survived replacement", err)
 			}
 			assertNoDeployTemps(t, project)
 		})
@@ -185,22 +190,81 @@ func TestCopyRollbackRestoresExistingSkill(t *testing.T) {
 	}
 	manifest, _ := deploymentRecord(t, l)
 	originalManifest := read(t, manifest)
+	guide := filepath.Join(project, ".agents", "skills", "sample-skill", "references", "guide.md")
+	write(t, guide, "local edit")
 	items, _ := l.Items()
 	write(t, filepath.Join(l.skillPath(items[2]), "references", "guide.md"), "new source")
+	copied := false
 	l.copySkill = func(source, dest string) ([]string, error) {
+		copied = true
 		created, err := copySkillDirectory(source, dest)
 		return created, errors.Join(err, errors.New("injected failure after copying"))
 	}
 	if _, err := l.Deploy(project, "codex", ids); err == nil {
 		t.Fatal("expected failure")
 	}
-	if read(t, filepath.Join(project, ".agents", "skills", "sample-skill", "references", "guide.md")) != "Useful reference" {
+	if !copied {
+		t.Fatal("replacement did not reach copy operation")
+	}
+	if read(t, guide) != "local edit" {
 		t.Fatal("existing skill not restored")
 	}
 	if read(t, manifest) != originalManifest {
 		t.Fatal("manifest changed")
 	}
 	assertNoDeployTemps(t, project)
+}
+
+func TestReplaceUnmanagedSkill(t *testing.T) {
+	for _, agent := range []string{"codex", "pi"} {
+		for _, failCopy := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/fail=%t", agent, failCopy), func(t *testing.T) {
+				l, project, ids := fixture(t)
+				rel := ".agents/skills"
+				if agent == "pi" {
+					rel = ".pi/skills"
+				}
+				dest := filepath.Join(project, rel, "sample-skill")
+				write(t, filepath.Join(dest, "SKILL.md"), "old skill")
+				obsolete := filepath.Join(dest, "old", "asset.txt")
+				write(t, obsolete, "old asset")
+				sibling := filepath.Join(project, rel, "other-skill", "SKILL.md")
+				write(t, sibling, "unselected skill")
+				copied := false
+				l.copySkill = func(source, target string) ([]string, error) {
+					copied = true
+					if _, err := os.Lstat(target); !errors.Is(err, os.ErrNotExist) {
+						t.Fatal("old destination still exists before copying", err)
+					}
+					created, err := copySkillDirectory(source, target)
+					if failCopy {
+						err = errors.Join(err, errors.New("injected copy failure"))
+					}
+					return created, err
+				}
+				result, err := l.Deploy(project, agent, ids[2:])
+				if !copied || (err != nil) != failCopy {
+					t.Fatalf("copied=%t, result=%+v, error=%v", copied, result, err)
+				}
+				if failCopy {
+					if read(t, filepath.Join(dest, "SKILL.md")) != "old skill" || read(t, obsolete) != "old asset" {
+						t.Fatal("original unmanaged skill was not restored")
+					}
+				} else {
+					items, _ := l.Items()
+					_, want, _ := skillInventory(l.skillPath(items[2]))
+					_, got, err := skillInventory(dest)
+					if err != nil || got != want || result.Skills != 1 {
+						t.Fatal("replacement differs from source", err)
+					}
+				}
+				if read(t, sibling) != "unselected skill" {
+					t.Fatal("unselected skill changed")
+				}
+				assertNoDeployTemps(t, project)
+			})
+		}
+	}
 }
 
 func TestCopiedSkillsRejectNestedLinks(t *testing.T) {

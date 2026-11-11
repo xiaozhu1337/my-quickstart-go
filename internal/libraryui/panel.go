@@ -216,7 +216,7 @@ func (p *Panel) View(c *ui.Context) {
 				}, false)
 			}
 		})
-		ui.Text(c, p.tr("按所选资源增量写入；已有项目配置会先备份，同名冲突不会覆盖。", "Adds selected resources; existing config is backed up, name conflicts are preserved.")).FontSize(11).TextColor(c.Theme().TextMuted)
+		ui.Text(c, p.tr("同名 Skill 会清理旧内容后重新复制；已有项目配置会先备份，MCP 同名冲突不会覆盖。", "Same-name skills are replaced completely; existing config is backed up, MCP name conflicts are preserved.")).FontSize(11).TextColor(c.Theme().TextMuted)
 		if p.Busy {
 			ui.Text(c, p.tr("正在处理…", "Working…"))
 		} else if p.failure != "" {

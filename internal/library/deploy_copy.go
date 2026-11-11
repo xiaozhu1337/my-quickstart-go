@@ -53,7 +53,7 @@ func contentHash(data []byte) string {
 }
 
 // skillInventory validates ordinary files and directories, without following links.
-// The digest includes paths, permissions and contents so local edits are protected.
+// The digest includes paths, permissions and contents to verify complete copies.
 func skillInventory(root string) ([]string, string, error) {
 	var paths []string
 	var total int64
