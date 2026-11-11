@@ -1,6 +1,7 @@
 package library
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -14,6 +15,37 @@ import (
 type deployedSkill struct {
 	ID   string `yaml:"id"`
 	Hash string `yaml:"hash"`
+}
+
+func directoriesOverlap(a, b string) bool {
+	for _, pair := range [][2]string{{a, b}, {b, a}} {
+		rel, err := filepath.Rel(pair[0], pair[1])
+		if err == nil && filepath.IsLocal(rel) {
+			return true
+		}
+	}
+	return false
+}
+
+// normalizeDeployedSkill keeps library aliases in the copy only.
+func normalizeDeployedSkill(root, name string) (bool, error) {
+	path := filepath.Join(root, "SKILL.md")
+	document, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	_, normalized, err := skillDocument(document, name, "")
+	if err != nil || bytes.Equal(document, normalized) {
+		return false, err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	if err = removePaths([]string{path}); err != nil {
+		return false, err
+	}
+	return true, os.WriteFile(path, normalized, info.Mode().Perm())
 }
 
 func contentHash(data []byte) string {

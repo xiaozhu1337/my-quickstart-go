@@ -240,8 +240,8 @@ func TestValidationPersistenceAndImport(t *testing.T) {
 		t.Fatal("persistence failed", items, err)
 	}
 	write(t, filepath.Join(filepath.Dir(l.Root), "source", "references", "guide.md"), "changed source")
-	if read(t, filepath.Join(l.Root, items[2].Directory, "references", "guide.md")) != "Useful reference" {
-		t.Fatal("import must be independent of source")
+	if read(t, filepath.Join(l.skillPath(items[2]), "references", "guide.md")) != "changed source" {
+		t.Fatal("import must reference the source")
 	}
 	if err := l.ImportSkill(filepath.Join(filepath.Dir(l.Root), "source")); err == nil {
 		t.Fatal("accepted duplicate skill")

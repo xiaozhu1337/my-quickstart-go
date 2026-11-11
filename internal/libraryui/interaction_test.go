@@ -73,9 +73,10 @@ func TestRowsHighlightToggleAndKeepEditSeparate(t *testing.T) {
 	}
 }
 
-func TestSkillOpensLibraryDirectoryWithoutChangingSelection(t *testing.T) {
+func TestSkillOpensSourceDirectoryWithoutChangingSelection(t *testing.T) {
 	p := New(filepath.Join(t.TempDir(), "library"))
 	source := t.TempDir()
+	source, _ = filepath.EvalSymlinks(source)
 	document := "---\nname: sample\ndescription: Before editing\n---\nOriginal instructions.\n"
 	if err := os.WriteFile(filepath.Join(source, "SKILL.md"), []byte(document), 0600); err != nil {
 		t.Fatal(err)
@@ -89,8 +90,8 @@ func TestSkillOpensLibraryDirectoryWithoutChangingSelection(t *testing.T) {
 	p.openFolder = func(path string) error { opened = path; return nil }
 	click(t, tt, "sample")
 	click(t, tt, "打开目录")
-	want := filepath.Join(p.store.Root, p.items[0].Directory)
-	if opened != want || opened == source || len(p.ids()) != 1 || p.editOpen || p.failure != "" {
+	want := source
+	if opened != want || len(p.ids()) != 1 || p.editOpen || p.failure != "" {
 		t.Fatal("opening folder changed selection or opened the wrong folder", opened, p.failure)
 	}
 	if !tt.HasText("编辑") {

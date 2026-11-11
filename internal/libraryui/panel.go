@@ -3,6 +3,7 @@ package libraryui
 import (
 	"fmt"
 	"log"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -114,7 +115,10 @@ func (p *Panel) ids() []string {
 func (p *Panel) edit(i library.Item) {
 	if i.Kind == "skill" {
 		p.skillID, p.skillName = i.ID, i.Name
-		p.source, p.failure = "", ""
+		p.source, p.failure = i.Directory, ""
+		if !filepath.IsAbs(p.source) {
+			p.source = filepath.Join(p.store.Root, p.source)
+		}
 		p.skillOpen = true
 		return
 	}

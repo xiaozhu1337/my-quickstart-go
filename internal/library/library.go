@@ -98,7 +98,7 @@ func (l *Library) read() ([]Item, error) {
 
 const libraryComment = `# Resource library. UTF-8; managed by My Quickstart Go.
 # id: stable resource ID; kind: mcp or skill; name: agent-facing name.
-# description: display summary; directory: imported skill directory relative to this file.
+# description: display summary; directory: absolute skill source path (legacy paths are relative to this file).
 # pinned: display this resource before unpinned resources.
 # mcp.command: executable; args: argument list; env: environment variables; cwd: absolute working directory.
 # mcp.url: HTTP endpoint (exclusive with command); headers: HTTP request headers.
@@ -117,7 +117,7 @@ func validate(i Item) error {
 		return errors.New("名称须为 1–64 位字母、数字、短横线或下划线，以字母或数字开头")
 	}
 	if i.Kind == "skill" {
-		if i.Directory == "" || filepath.IsAbs(i.Directory) || !filepath.IsLocal(i.Directory) {
+		if i.Directory == "" || (!filepath.IsAbs(i.Directory) && !filepath.IsLocal(i.Directory)) {
 			return errors.New("无效 skill 目录")
 		}
 		return nil

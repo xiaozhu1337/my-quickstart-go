@@ -190,14 +190,28 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 		}
 	}
 	skillHashes := map[string]string{}
+	skillSources := map[string]string{}
 	if len(skills) > 0 {
 		if err = safeParent(project, skillRel); err != nil {
 			return result, err
 		}
 		for _, i := range skills {
-			target := filepath.Join(l.Root, i.Directory)
-			if err = safeParent(l.Root, i.Directory); err != nil {
+			target := l.skillPath(i)
+			if !filepath.IsAbs(i.Directory) {
+				if err = safeParent(l.Root, i.Directory); err != nil {
+					return result, err
+				}
+			}
+			target, err = filepath.EvalSymlinks(target)
+			if err != nil {
 				return result, err
+			}
+			skillSources[i.ID] = target
+			for _, other := range skills {
+				dest := filepath.Join(project, skillRel, other.Name)
+				if directoriesOverlap(target, dest) {
+					return result, fmt.Errorf("Skill 源目录与目标目录重叠，未复制: %s", dest)
+				}
 			}
 			if _, err = os.Stat(filepath.Join(target, "SKILL.md")); err != nil {
 				return result, err
@@ -271,7 +285,7 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 	for _, i := range skills {
 		path := filepath.Join(project, skillRel, i.Name)
 		_, err = tx.replace(path, false, func(dest string) ([]string, error) {
-			return l.copySkill(filepath.Join(l.Root, i.Directory), dest)
+			return l.copySkill(skillSources[i.ID], dest)
 		})
 		if err != nil {
 			return fail(err)
@@ -282,6 +296,16 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 		}
 		if digest != skillHashes[i.ID] {
 			return fail(errors.New("Skill 在复制期间发生变化"))
+		}
+		changed, err := normalizeDeployedSkill(path, i.Name)
+		if err != nil {
+			return fail(err)
+		}
+		if changed {
+			_, digest, e = skillInventory(path)
+			if e != nil {
+				return fail(e)
+			}
 		}
 		manifest.Skills[i.Name] = deployedSkill{ID: i.ID, Hash: digest}
 	}

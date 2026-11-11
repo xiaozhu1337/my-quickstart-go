@@ -40,7 +40,7 @@ func TestSkillCopiesAreIndependentAndRefresh(t *testing.T) {
 		t.Run(agent, func(t *testing.T) {
 			l, project, ids := fixture(t)
 			items, _ := l.Items()
-			source := filepath.Join(l.Root, items[2].Directory)
+			source := l.skillPath(items[2])
 			rel := ".agents/skills/sample-skill"
 			if agent == "pi" {
 				rel = ".pi/skills/sample-skill"
@@ -121,7 +121,7 @@ func TestLegacyLinksMigrateAndRollback(t *testing.T) {
 				t.Fatal(err)
 			}
 			items, _ := l.Items()
-			source := filepath.Join(l.Root, items[2].Directory)
+			source := l.skillPath(items[2])
 			if err := os.Symlink(source, skill); err != nil {
 				t.Fatal(err)
 			}
@@ -186,7 +186,7 @@ func TestCopyRollbackRestoresExistingSkill(t *testing.T) {
 	manifest, _ := deploymentRecord(t, l)
 	originalManifest := read(t, manifest)
 	items, _ := l.Items()
-	write(t, filepath.Join(l.Root, items[2].Directory, "references", "guide.md"), "new source")
+	write(t, filepath.Join(l.skillPath(items[2]), "references", "guide.md"), "new source")
 	l.copySkill = func(source, dest string) ([]string, error) {
 		created, err := copySkillDirectory(source, dest)
 		return created, errors.Join(err, errors.New("injected failure after copying"))
@@ -206,7 +206,7 @@ func TestCopyRollbackRestoresExistingSkill(t *testing.T) {
 func TestCopiedSkillsRejectNestedLinks(t *testing.T) {
 	l, project, ids := fixture(t)
 	items, _ := l.Items()
-	source := filepath.Join(l.Root, items[2].Directory)
+	source := l.skillPath(items[2])
 	external := filepath.Join(t.TempDir(), "external.txt")
 	write(t, external, "external")
 	if err := os.Symlink(external, filepath.Join(source, "linked.txt")); err != nil {
@@ -226,7 +226,7 @@ func TestCopiedSkillsRejectNestedLinks(t *testing.T) {
 func TestReadOnlySkillAssetsCanRefresh(t *testing.T) {
 	l, project, ids := fixture(t)
 	items, _ := l.Items()
-	asset := filepath.Join(l.Root, items[2].Directory, "references", "guide.md")
+	asset := filepath.Join(l.skillPath(items[2]), "references", "guide.md")
 	if err := os.Chmod(asset, 0400); err != nil {
 		t.Fatal(err)
 	}

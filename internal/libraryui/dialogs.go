@@ -46,10 +46,10 @@ func (p *Panel) dialogs(c *ui.Context) {
 		}
 		ui.Text(c, title).FontSize(20).Bold()
 		if p.skillID != "" {
-			ui.Text(c, p.tr("输入包含 SKILL.md 的目录路径，用该目录完整替换已保存的文件；保留当前名称与置顶状态。", "Enter a directory containing SKILL.md to replace the saved files, keeping the current name and pin state."))
+			ui.Text(c, p.tr("修改 Skill 所在目录；只更新目录引用，不修改新旧目录中的文件，保留当前名称与置顶状态。", "Change the skill directory reference without modifying files in either directory; keep the current name and pin state."))
 			ui.Text(c, p.tr("更新后需重新复制到项目，才会更新项目内的 Skill。", "Copy again after updating to refresh the skill in each project.")).FontSize(11).TextColor(c.Theme().TextMuted)
 		} else {
-			ui.Text(c, p.tr("选择包含 SKILL.md 的目录；整个目录会复制并统一保存到资源库。", "Choose a directory containing SKILL.md; its contents are copied into the library."))
+			ui.Text(c, p.tr("选择包含 SKILL.md 的目录，直接使用该目录；仅在复制到项目时复制文件。", "Choose a directory containing SKILL.md to use directly; files are copied only when deploying to a project."))
 		}
 		ui.Row(c).Gap(8).Children(func() {
 			ui.TextInput(c.Key("skill-source"), &p.source).Label(p.tr("Skill 目录", "Skill directory")).Grow(1).Disabled(p.Busy)

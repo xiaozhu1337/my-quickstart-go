@@ -22,7 +22,15 @@ func (l *Library) SetPinned(id string, pinned bool) error {
 	return errors.New("资源不存在")
 }
 
-// SkillDirectory returns the imported library copy, not the original source.
+// skillPath supports source references and legacy library-relative directories.
+func (l *Library) skillPath(item Item) string {
+	if filepath.IsAbs(item.Directory) {
+		return item.Directory
+	}
+	return filepath.Join(l.Root, item.Directory)
+}
+
+// SkillDirectory returns the directory referenced by the resource.
 func (l *Library) SkillDirectory(id string) (string, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -37,7 +45,7 @@ func (l *Library) SkillDirectory(id string) (string, error) {
 		if item.Kind != "skill" {
 			return "", errors.New("资源不是 Skill")
 		}
-		path := filepath.Join(l.Root, item.Directory)
+		path := l.skillPath(item)
 		info, err := os.Stat(path)
 		if err != nil {
 			return "", err

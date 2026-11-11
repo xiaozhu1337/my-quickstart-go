@@ -3,7 +3,6 @@ package library
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -89,7 +88,7 @@ func (l *Library) importSkill(source, name, note string) error {
 	if err != nil {
 		return fmt.Errorf("请选择包含 SKILL.md 的目录: %w", err)
 	}
-	meta, b, err := skillDocument(b, name, note)
+	meta, _, err := skillDocument(b, name, note)
 	if err != nil {
 		return err
 	}
@@ -102,80 +101,6 @@ func (l *Library) importSkill(source, name, note string) error {
 			return errors.New("Skill 名称已存在")
 		}
 	}
-	id := uuid.NewString()
-	rel := filepath.Join("skills", id, meta.Name)
-	dest := filepath.Join(l.Root, rel)
-	var paths []string
-	var total int64
-	err = filepath.WalkDir(source, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return fmt.Errorf("导入目录包含软链接，请先展开: %s", path)
-		}
-		if !entry.IsDir() {
-			info, e := entry.Info()
-			if e != nil {
-				return e
-			}
-			if !info.Mode().IsRegular() {
-				return fmt.Errorf("不支持的 skill 文件: %s", path)
-			}
-			total += info.Size()
-		}
-		paths = append(paths, path)
-		if len(paths) > 10000 || total > 100<<20 {
-			return errors.New("Skill 超过 10000 个文件或 100 MiB")
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	var created []string
-	rollback := func() {
-		for n := len(created) - 1; n >= 0; n-- {
-			_ = os.Remove(created[n])
-		}
-	}
-	for _, path := range paths {
-		r, e := filepath.Rel(source, path)
-		if e != nil {
-			rollback()
-			return e
-		}
-		target := filepath.Join(dest, r)
-		info, e := os.Lstat(path)
-		if e != nil {
-			rollback()
-			return e
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			rollback()
-			return errors.New("Skill 在导入期间发生变化")
-		}
-		if info.IsDir() {
-			e = os.MkdirAll(target, 0700)
-		} else {
-			var raw []byte
-			raw, e = os.ReadFile(path)
-			if r == "SKILL.md" && name != "" {
-				raw = b
-			}
-			if e == nil {
-				e = os.WriteFile(target, raw, info.Mode().Perm())
-			}
-		}
-		if e != nil {
-			rollback()
-			return e
-		}
-		created = append(created, target)
-	}
-	items = append(items, Item{ID: id, Kind: "skill", Name: meta.Name, Description: meta.Description, Directory: rel})
-	if err = l.write(items); err != nil {
-		rollback()
-	}
-	return err
+	items = append(items, Item{ID: uuid.NewString(), Kind: "skill", Name: meta.Name, Description: meta.Description, Directory: source})
+	return l.write(items)
 }

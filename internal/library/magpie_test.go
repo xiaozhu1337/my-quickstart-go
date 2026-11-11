@@ -90,12 +90,16 @@ func TestImportMagpiePortableAndRepeat(t *testing.T) {
 			t.Fatal(item)
 		}
 		if item.Name == "imported" {
-			copied := filepath.Join(l.Root, item.Directory)
+			copied := l.skillPath(item)
+			resolved, err := filepath.EvalSymlinks(skill)
+			if err != nil || !samePath(copied, resolved) {
+				t.Fatal("import did not reference source", copied)
+			}
 			if read(t, filepath.Join(copied, "scripts", "example.py")) != "print('sample')" {
 				t.Fatal("support file lost")
 			}
 			body := read(t, filepath.Join(copied, "SKILL.md"))
-			if !strings.Contains(body, "name: imported") || !strings.Contains(body, "custom: keep") || !strings.HasSuffix(body, "---\nInstructions\n") {
+			if !strings.Contains(body, "name: original") || !strings.Contains(body, "custom: keep") || !strings.HasSuffix(body, "---\nInstructions\n") {
 				t.Fatal(body)
 			}
 			if !strings.Contains(item.Description, "Extra note") {

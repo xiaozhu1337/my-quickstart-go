@@ -2,7 +2,6 @@ package library
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -36,11 +35,11 @@ func TestPinRoundTripAndMCPEdit(t *testing.T) {
 	}
 }
 
-func TestSkillDirectoryUsesImportedCopy(t *testing.T) {
+func TestSkillDirectoryUsesSourceReference(t *testing.T) {
 	l, _, ids := fixture(t)
 	items, _ := l.Items()
 	path, err := l.SkillDirectory(ids[2])
-	if err != nil || path != filepath.Join(l.Root, items[2].Directory) {
+	if err != nil || path != l.skillPath(items[2]) {
 		t.Fatal("wrong directory", path, err)
 	}
 	for _, id := range []string{ids[0], "missing"} {
