@@ -118,7 +118,7 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 	if strings.TrimSpace(project) == "" {
 		return result, errors.New("请选择项目目录")
 	}
-	project, err := filepath.Abs(project)
+	project, err := absoluteUserPath(project)
 	if err != nil {
 		return result, err
 	}

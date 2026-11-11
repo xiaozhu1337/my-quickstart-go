@@ -29,7 +29,7 @@ The top tabs switch between **Launcher** and **MCP / Skills**, preserving launch
 
 Use **Add MCP** to save a named server with YAML fields `command`, `args`, `env`, `cwd`, or HTTP `url` and `headers`. Use **Add Skill** to import a directory containing `SKILL.md` with `name` and `description` frontmatter. The library references that directory directly without copying files. Deployment reads the current source contents; copies containing nested symlinks are rejected and limited to 100 MiB and 10,000 paths.
 
-Select resources, choose **codex** or **pi**, select a project directory, and click **Copy to project**.
+Select resources, choose **codex** or **pi**, select a project directory, and click **Copy to project**. Project directories and Skill source directories accept `~` for the current user's home directory, such as `~\code\kernel-debug` or `~/code/kernel-debug`.
 
 MCP names can be edited after saving. Copying a renamed resource again replaces its previously managed name in that project, while preserving other servers. Duplicate resource names remain disallowed.
 

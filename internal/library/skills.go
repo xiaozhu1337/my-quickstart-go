@@ -21,7 +21,7 @@ func skillSource(source string) (string, error) {
 	if strings.TrimSpace(source) == "" {
 		return "", errors.New("请选择包含 SKILL.md 的目录")
 	}
-	source, err := filepath.Abs(strings.TrimSpace(source))
+	source, err := absoluteUserPath(source)
 	if err != nil {
 		return "", err
 	}

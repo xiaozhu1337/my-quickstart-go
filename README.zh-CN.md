@@ -28,7 +28,7 @@
 
 1. 点击“添加 MCP”，填写名称、说明和单个服务的 YAML 配置。支持 `command`、`args`、`env`、`cwd`，或 HTTP 的 `url`、`headers`；可再次编辑配置。
 2. 点击“添加 Skill”，选择含 `SKILL.md` 的目录。文件须包含 `name` 和 `description` frontmatter；直接将该目录记录为 Skill 所在目录，不复制文件。复制到项目时才读取当前目录内容；复制时拒绝目录内的软链接，单项上限为 100 MiB、10000 个路径。
-3. 左键点击所需 MCP / Skill 条目，选择 `codex` 或 `pi`、项目目录，再点击“复制到项目”。
+3. 左键点击所需 MCP / Skill 条目，选择 `codex` 或 `pi`、项目目录，再点击“复制到项目”。项目目录和添加、编辑 Skill 的目录均支持 `~` 表示当前用户主目录，例如 `~\code\kernel-debug` 或 `~/code/kernel-debug`。
 
 MCP 保存后可随时编辑名称；再次复制到项目时，会替换这个资源先前使用的名称，保留其他服务。同类型资源仍不能重名。
 
