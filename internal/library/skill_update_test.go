@@ -55,7 +55,7 @@ func TestUpdateSkillChangesReferenceWithoutChangingFiles(t *testing.T) {
 			t.Fatal("editing changed source files", path, err)
 		}
 	}
-	projectDoc := filepath.Join(project, ".agents", "skills", old.Name, "SKILL.md")
+	projectDoc := filepath.Join(project, ".codex", "skills", old.Name, "SKILL.md")
 	if strings.Contains(read(t, projectDoc), "New instructions.") {
 		t.Fatal("project changed before deployment")
 	}
@@ -182,7 +182,7 @@ func TestDeployRejectsOverlappingSourceAndDestination(t *testing.T) {
 	for _, relation := range []string{"same", "source-parent", "destination-parent"} {
 		t.Run(relation, func(t *testing.T) {
 			l, project, ids := fixture(t)
-			dest := filepath.Join(project, ".agents", "skills", "sample-skill")
+			dest := filepath.Join(project, ".codex", "skills", "sample-skill")
 			source := dest
 			if relation == "source-parent" {
 				source = project

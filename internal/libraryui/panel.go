@@ -112,6 +112,11 @@ func (p *Panel) ids() []string {
 	return ids
 }
 
+// ClearSelection clears resources selected for deployment or removal.
+func (p *Panel) ClearSelection() {
+	p.selected = map[string]bool{}
+}
+
 func (p *Panel) edit(i library.Item) {
 	if i.Kind == "skill" {
 		p.skillID, p.skillName = i.ID, i.Name
@@ -197,7 +202,7 @@ func (p *Panel) View(c *ui.Context) {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, fmt.Sprintf(p.tr("已选择 %d 项", "%d selected"), len(p.ids()))).Grow(1)
 			if ui.Button(c, p.tr("取消选择", "Clear selection")).Disabled(p.Busy).Clicked() {
-				p.selected = map[string]bool{}
+				p.ClearSelection()
 			}
 			if ui.Button(c, p.tr("从库移除", "Remove from library")).Disabled(p.Busy || len(p.ids()) == 0).Clicked() {
 				p.removeOpen = true

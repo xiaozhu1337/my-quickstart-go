@@ -84,7 +84,7 @@ func TestDeployBothAgentsAndUpdate(t *testing.T) {
 	for _, agent := range []string{"codex", "pi"} {
 		t.Run(agent, func(t *testing.T) {
 			l, project, ids := fixture(t)
-			rel, key, skills := ".codex/config.toml", "mcp_servers", ".agents/skills"
+			rel, key, skills := ".codex/config.toml", "mcp_servers", ".codex/skills"
 			original := "# user comment\nmodel = 'custom-model'\n[mcp_servers.personal]\ncommand = 'personal'\n[features]\nexample = true\n"
 			if agent == "pi" {
 				rel, key, skills = ".pi/mcp.json", "mcpServers", ".pi/skills"
@@ -157,6 +157,20 @@ func TestDeployBothAgentsAndUpdate(t *testing.T) {
 	}
 }
 
+func TestCodexSkillUsesCodexDirectory(t *testing.T) {
+	l, project, ids := fixture(t)
+	if _, err := l.Deploy(project, "codex", ids[2:]); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(project, ".codex", "skills", "sample-skill", "SKILL.md")
+	if info, err := os.Stat(path); err != nil || !info.Mode().IsRegular() {
+		t.Fatal("Codex Skill was not copied to .codex/skills", err)
+	}
+	if _, err := os.Lstat(filepath.Join(project, ".agents")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("Codex deployment unexpectedly wrote an .agents directory", err)
+	}
+}
+
 func TestConflictsAndInvalidConfigDoNotModifyProject(t *testing.T) {
 	for _, original := range []string{"[invalid", "[mcp_servers.local-tools]\ncommand = 'other'\n"} {
 		l, project, ids := fixture(t)
@@ -168,7 +182,7 @@ func TestConflictsAndInvalidConfigDoNotModifyProject(t *testing.T) {
 		if read(t, path) != original {
 			t.Fatal("original config modified")
 		}
-		if _, err := os.Lstat(filepath.Join(project, ".agents", "skills", "sample-skill")); !errors.Is(err, os.ErrNotExist) {
+		if _, err := os.Lstat(filepath.Join(project, ".codex", "skills", "sample-skill")); !errors.Is(err, os.ErrNotExist) {
 			t.Fatal("partial skill deployment")
 		}
 	}

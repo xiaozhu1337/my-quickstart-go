@@ -41,7 +41,7 @@ func TestSkillCopiesAreIndependentAndRefresh(t *testing.T) {
 			l, project, ids := fixture(t)
 			items, _ := l.Items()
 			source := l.skillPath(items[2])
-			rel := ".agents/skills/sample-skill"
+			rel := ".codex/skills/sample-skill"
 			if agent == "pi" {
 				rel = ".pi/skills/sample-skill"
 			}
@@ -103,7 +103,7 @@ func TestLegacyLinksMigrateAndRollback(t *testing.T) {
 				t.Fatal(err)
 			}
 			manifest, record := deploymentRecord(t, l)
-			configRel, skillRel, filename := ".codex/config.toml", ".agents/skills/sample-skill", "config.toml"
+			configRel, skillRel, filename := ".codex/config.toml", ".codex/skills/sample-skill", "config.toml"
 			if agent == "pi" {
 				configRel, skillRel, filename = ".pi/mcp.json", ".pi/skills/sample-skill", "mcp.json"
 			}
@@ -190,7 +190,7 @@ func TestCopyRollbackRestoresExistingSkill(t *testing.T) {
 	}
 	manifest, _ := deploymentRecord(t, l)
 	originalManifest := read(t, manifest)
-	guide := filepath.Join(project, ".agents", "skills", "sample-skill", "references", "guide.md")
+	guide := filepath.Join(project, ".codex", "skills", "sample-skill", "references", "guide.md")
 	write(t, guide, "local edit")
 	items, _ := l.Items()
 	write(t, filepath.Join(l.skillPath(items[2]), "references", "guide.md"), "new source")
@@ -220,7 +220,7 @@ func TestReplaceUnmanagedSkill(t *testing.T) {
 		for _, failCopy := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/fail=%t", agent, failCopy), func(t *testing.T) {
 				l, project, ids := fixture(t)
-				rel := ".agents/skills"
+				rel := ".codex/skills"
 				if agent == "pi" {
 					rel = ".pi/skills"
 				}

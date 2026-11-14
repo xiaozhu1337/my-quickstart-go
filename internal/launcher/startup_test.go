@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"my-quickstart-go/internal/library"
 	"my-quickstart-go/internal/model"
 )
 
@@ -187,6 +188,37 @@ func TestHiddenReturnReopenAndStaleCallbacks(t *testing.T) {
 			t.Fatal("callbacks must not change pages after quit")
 		}
 	})
+}
+
+func TestHiddenReturnClearsLibrarySelection(t *testing.T) {
+	root := t.TempDir()
+	resources, err := library.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = resources.SaveMCP("", "selected-resource", "", "command: tool"); err != nil {
+		t.Fatal(err)
+	}
+	a := fixture()
+	a.SetLibrary(root)
+	a.mainTab = 1
+	tt := ui.NewTester(a.view, 960, 620)
+	if err = tt.Click("selected-resource"); err != nil {
+		t.Fatal(err)
+	}
+	if !tt.HasText("1 selected") {
+		t.Fatal("resource was not selected")
+	}
+	a.hiddenReturnDeadline = time.Now().Add(-time.Second)
+	a.finishHiddenReturn(a.hiddenReturnGeneration, time.Now())
+	if a.mainTab != 0 {
+		t.Fatal("expired hide did not return to launcher")
+	}
+	a.mainTab = 1
+	tt.Frame()
+	if !tt.HasText("0 selected") {
+		t.Fatal("expired hide kept the library selection")
+	}
 }
 
 func TestHiddenReturnSetting(t *testing.T) {

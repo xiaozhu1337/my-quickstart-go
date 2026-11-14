@@ -50,7 +50,7 @@ func TestDeployHomePath(t *testing.T) {
 					t.Fatalf("project = %q, want %q: %v", record.Project, canonical, err)
 				}
 			}
-			rel := ".agents"
+			rel := ".codex"
 			if agent == "pi" {
 				rel = ".pi"
 			}

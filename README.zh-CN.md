@@ -46,7 +46,7 @@ MCP 和 Skill 条目均提供“编辑”按钮。编辑 Skill 时，输入框�
 
 | Agent | MCP 配置文件 | Skill 目录副本 |
 | --- | --- | --- |
-| Codex | `.codex/config.toml` | `.agents/skills/<name>` |
+| Codex | `.codex/config.toml` | `.codex/skills/<name>` |
 | pi（原生 MCP） | `.pi/mcp.json` | `.pi/skills/<name>` |
 
 资源元数据保存在数据库同级的 `library` 目录：`library.yaml` 保存资源信息、MCP 配置和 Skill 目录的绝对路径；旧版 `skills` 中的相对路径记录继续兼容，可通过编辑重新指定来源。`projects` 保存每个项目的部署记录（旧版生成配置保留以兼容迁移）。库配置采用 YAML；写入 agent 时转换为其要求的 TOML / JSON。

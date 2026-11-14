@@ -157,7 +157,7 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 	}
 	hash := sha256.Sum256([]byte(key + "\x00" + agent))
 	profile := filepath.Join(l.Root, "projects", fmt.Sprintf("%x", hash[:16]))
-	configRel, skillRel, filename := filepath.Join(".codex", "config.toml"), filepath.Join(".agents", "skills"), "config.toml"
+	configRel, skillRel, filename := filepath.Join(".codex", "config.toml"), filepath.Join(".codex", "skills"), "config.toml"
 	if agent == "pi" {
 		configRel, skillRel, filename = filepath.Join(".pi", "mcp.json"), filepath.Join(".pi", "skills"), "mcp.json"
 	}

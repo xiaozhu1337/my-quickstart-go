@@ -47,7 +47,7 @@ To migrate existing resources, open **Settings → Resources → Resource import
 
 | Agent | MCP configuration file | Skill directory copies |
 | --- | --- | --- |
-| Codex | `.codex/config.toml` | `.agents/skills/<name>` |
+| Codex | `.codex/config.toml` | `.codex/skills/<name>` |
 | pi (native MCP) | `.pi/mcp.json` | `.pi/skills/<name>` |
 
 Resource metadata lives in `library` next to the database: `library.yaml` stores resource metadata, MCP definitions, and absolute Skill directory paths. Legacy relative paths under `skills` remain supported and can be changed through the editor. `projects` holds deployment records for each project (legacy generated configs are retained for migration). The library uses YAML; agent configurations use their required TOML or JSON formats.
