@@ -32,17 +32,17 @@ func (a *App) view(c *ui.Context) {
 	}
 	ui.Column(c).Fill().Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-			disabled := a.editorOpen || a.renameOpen || a.addOpen
+			disabled := a.editorOpen || a.renameOpen || a.addOpen || (a.mainTab == 2 && a.schedule.ModalOpen())
 			selected := a.mainTab
 			if a.settingsOpen {
-				for i, label := range []string{a.text("应用启动", "Launcher"), "MCP / Skills"} {
+				for i, label := range []string{a.text("应用启动", "Launcher"), "MCP / Skills", a.text("定时任务", "Scheduled tasks")} {
 					button := ui.ButtonBase(c.Key("settings-return-"+label)).Padding(10, 12).Label(label).Disabled(disabled)
 					button.Children(func() { ui.Text(c, label).TextColor(t.TextMuted) })
 					if button.Clicked() {
 						a.mainTab, a.settingsOpen = i, false
 					}
 				}
-			} else if ui.Tabs(c, &selected, a.text("应用启动", "Launcher"), "MCP / Skills").Disabled(disabled).Changed() {
+			} else if ui.Tabs(c, &selected, a.text("应用启动", "Launcher"), "MCP / Skills", a.text("定时任务", "Scheduled tasks")).Disabled(disabled).Changed() {
 				a.mainTab, a.settingsOpen = selected, false
 			}
 			ui.Box(c).Grow(1)
@@ -60,6 +60,12 @@ func (a *App) view(c *ui.Context) {
 		}
 		if a.settingsOpen {
 			a.settingsView(c)
+		} else if a.mainTab == 2 {
+			a.schedule.Language = a.state.Settings.Language
+			ui.Column(c).Grow(1).FillWidth().Children(func() {
+				a.schedule.View(c)
+				a.statusView(c)
+			})
 		} else if a.mainTab == 1 {
 			if a.library != nil {
 				a.library.Language = a.state.Settings.Language

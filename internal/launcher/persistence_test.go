@@ -77,7 +77,9 @@ func TestSaverSnapshotsAndRetries(t *testing.T) {
 	state.Groups[0].Apps = []model.Entry{model.NewEntry("App", "app.exe", "")}
 	state.Groups[0].Apps[0].EnvVars = []string{"KEY=old"}
 	state.Settings.WindowBounds = &model.Bounds{Width: 800, Height: 600}
+	state.Tasks = []model.ScheduledTask{{ID: "task", Name: "Original task", Path: "app.exe", Time: "09:00"}}
 	s.set(state)
+	state.Tasks[0].Name = "Changed task"
 	state.Groups[0].Apps[0].Name = "Modified"
 	state.Groups[0].Apps[0].EnvVars[0] = "KEY=new"
 	state.Settings.WindowBounds.Width = 900
@@ -91,6 +93,9 @@ func TestSaverSnapshotsAndRetries(t *testing.T) {
 	}
 	if p.state.Groups[0].Apps[0].Name != "App" || p.state.Groups[0].Apps[0].EnvVars[0] != "KEY=old" || p.state.Settings.WindowBounds.Width != 800 {
 		t.Fatal("save snapshot aliases mutable UI state")
+	}
+	if p.state.Tasks[0].Name != "Original task" {
+		t.Fatal("save snapshot aliases mutable scheduled tasks")
 	}
 	if err := s.flush(); err != nil {
 		t.Fatal(err)

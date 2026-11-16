@@ -13,11 +13,13 @@ import (
 	"my-quickstart-go/internal/libraryui"
 	"my-quickstart-go/internal/model"
 	"my-quickstart-go/internal/platform"
+	"my-quickstart-go/internal/scheduleui"
 )
 
 type App struct {
 	mainTab          int
 	library          *libraryui.Panel
+	schedule         *scheduleui.Panel
 	state            model.State
 	saver            *saver
 	window           *mygo.Window
@@ -79,6 +81,12 @@ func New(state model.State, p persistence) *App {
 	if p != nil {
 		a.saver = newSaver(p)
 	}
+	a.schedule = scheduleui.New(&a.state.Tasks, a.changed, func() error {
+		if a.saver != nil {
+			return a.saver.flush()
+		}
+		return nil
+	})
 	a.filter()
 	return a
 }
@@ -113,6 +121,7 @@ func (a *App) Ready() {
 	a.window.OnShow(a.cancelHiddenReturn)
 	a.window.OnResize(a.captureBounds)
 	a.window.OnMove(a.captureBounds)
+	a.schedule.Start(a.window)
 	mygo.App.SetLanguages(a.state.Settings.Language)
 	if err := a.applyHotkey(a.state.Settings.ToggleHotkey); err != nil {
 		a.report(err)
@@ -222,6 +231,11 @@ func (a *App) onClose(e *mygo.CloseEvent) {
 }
 
 func (a *App) BeforeQuit(e *mygo.QuitEvent) {
+	if a.schedule.Busy() {
+		e.PreventDefault()
+		a.report(errors.New(a.text("定时任务正在启动，请稍后再退出", "A scheduled task is starting; please wait before quitting")))
+		return
+	}
 	if a.library != nil && a.library.Busy {
 		e.PreventDefault()
 		a.report(errors.New(a.text("资源库正在保存，请完成后再退出", "Library operation in progress; please wait before quitting")))
@@ -233,6 +247,7 @@ func (a *App) BeforeQuit(e *mygo.QuitEvent) {
 		return
 	}
 	a.quitting = true
+	a.schedule.Stop()
 	a.cancelHiddenReturn()
 }
 
@@ -251,6 +266,7 @@ func (a *App) Flush() error {
 	return err
 }
 func (a *App) Close() {
+	a.schedule.Stop()
 	a.cancelHiddenReturn()
 	if a.saver != nil {
 		close(a.saver.stop)

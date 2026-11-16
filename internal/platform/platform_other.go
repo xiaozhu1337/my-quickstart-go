@@ -62,6 +62,8 @@ func Launch(entry model.Entry) error {
 	return start(cmd)
 }
 
+func LaunchScheduled(entry model.Entry) error { return Launch(entry) }
+
 func start(cmd *exec.Cmd) error {
 	if err := cmd.Start(); err != nil {
 		return err

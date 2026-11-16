@@ -56,10 +56,11 @@ type Settings struct {
 }
 
 type State struct {
-	Version       int      `json:"version" yaml:"version"`
-	ActiveGroupID string   `json:"activeGroupId" yaml:"activeGroupId"`
-	Groups        []Group  `json:"groups" yaml:"groups"`
-	Settings      Settings `json:"settings" yaml:"settings"`
+	Version       int             `json:"version" yaml:"version"`
+	ActiveGroupID string          `json:"activeGroupId" yaml:"activeGroupId"`
+	Groups        []Group         `json:"groups" yaml:"groups"`
+	Settings      Settings        `json:"settings" yaml:"settings"`
+	Tasks         []ScheduledTask `json:"tasks,omitempty" yaml:"tasks,omitempty"`
 }
 
 func ID() string {
@@ -157,6 +158,15 @@ func (s State) Validate() error {
 			}
 			seen[e.ID] = true
 		}
+	}
+	for _, task := range s.Tasks {
+		if err := task.Validate(); err != nil {
+			return fmt.Errorf("task %q: %w", task.Name, err)
+		}
+		if seen[task.ID] {
+			return errors.New("duplicate task ID")
+		}
+		seen[task.ID] = true
 	}
 	return nil
 }

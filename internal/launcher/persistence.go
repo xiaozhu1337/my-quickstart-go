@@ -33,6 +33,7 @@ func newSaver(p persistence) *saver {
 }
 
 func clone(state model.State) model.State {
+	state.Tasks = append([]model.ScheduledTask(nil), state.Tasks...)
 	state.Groups = append([]model.Group(nil), state.Groups...)
 	for i := range state.Groups {
 		state.Groups[i].Apps = append([]model.Entry(nil), state.Groups[i].Apps...)

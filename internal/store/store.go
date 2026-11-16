@@ -242,6 +242,10 @@ func load(tx *sql.Tx) (model.State, error) {
 		return state, err
 	}
 	// The old launcher falls back to the first group when active_group_id is absent or stale.
+	state.Tasks, err = loadTasks(tx)
+	if err != nil {
+		return state, err
+	}
 	if state.Group(state.ActiveGroupID) == nil && len(state.Groups) > 0 {
 		state.ActiveGroupID = state.Groups[0].ID
 	}
@@ -331,6 +335,9 @@ func (s *Store) Save(state model.State) error {
 				return err
 			}
 		}
+	}
+	if err := saveTasks(tx, state.Tasks); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

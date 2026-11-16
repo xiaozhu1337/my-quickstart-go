@@ -29,6 +29,7 @@
 | 托盘显示/隐藏、退出；普通 X 隐藏 | 退出先保存；无托盘和热键时拒绝隐藏 | `internal/launcher/app.go`、`cmd/quickstart/main.go` |
 | 应用图标 | 统一蓝色四格标识；运行时全局/窗口 PNG，Windows 内嵌七档 ICO 资源，macOS 应用包 ICNS | `internal/branding`、`internal/launcher/app.go`、`scripts/build.py` |
 | SQLite、历史列兼容、旧数据迁移 | 独立新版库，SQLite 一致性读取、事务写入、失败保护 | `internal/store` |
+| 每日定时运行程序 | 独立定时任务标签，时间/程序/参数编辑，启停、立即执行、删除确认、名称/路径搜索及每页 20 项；展示下次时间和最近启动结果 | `internal/scheduleui`、`internal/model/task.go`、`internal/store/tasks.go` |
 
 16 个原设置字段均保留：`language`、`theme`、`fontFamily`、`fontSize`、`sidebarWidth`、`cardWidth`、`cardHeight`、`cardFontSize`、`cardIconScale`、`dblClickBlankToHide`、`alwaysOnTop`、`hideOnStartup`、`useRelativePath`、`rememberWindowBounds`、`windowBounds`、`toggleHotkey`。
 
@@ -51,6 +52,8 @@
 Windows 保留原始参数引号和反斜杠，修复旧版将反斜杠当作通用转义符而破坏路径参数的问题。.lnk 的工作目录、管理员标记和显示模式不属于原版已支持的能力。跨系统使用数据时，需要自行调整目标路径、参数及命令语法。
 
 ## 已执行验证
+
+定时任务增量验证（2026-11-16）：每天按本地时间触发，同分钟多个任务分别启动、同日不重复、重启保留执行标记、跨日/年末/夏令时跳时、停用及手动执行、保存失败阻止启动均有回归覆盖。SQLite 任务新增/删除/结果保存、旧库缺少任务表兼容、事务回滚及异步保存快照隔离通过。MyGo 无窗口界面测试覆盖 560×380 与 960×620、中英文标签和设置切换、表单校验、增删改、启停、立即执行、分页和跨页搜索；[定时任务预览](schedule-preview.png) 使用示例数据渲染。Windows 测试子进程确认 `.bat` / `.cmd` 的参数与工作目录正确，且脚本及子进程没有控制台窗口。运行结果表示启动请求成功或失败，不监控目标程序最终退出码；完全退出启动器或休眠错过的时间不补执行。
 
 验证日期：2026-10-17。所有启动验证均使用临时测试数据库，没有打开或改写用户的真实启动器数据库，也没有自动启动其中的条目。
 

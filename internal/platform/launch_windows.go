@@ -96,6 +96,28 @@ func startConsole(cmd *exec.Cmd) error {
 }
 
 func Launch(entry model.Entry) error {
+	return launch(entry, false)
+}
+
+// LaunchScheduled hides console windows while allowing graphical applications to open.
+func LaunchScheduled(entry model.Entry) error {
+	path := absolutePath(entry.Path)
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return errors.New("scheduled program must be a file")
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".exe", ".com", ".bat", ".cmd":
+		return launch(entry, true)
+	default:
+		return errors.New("scheduled program must be an .exe, .com, .bat or .cmd file")
+	}
+}
+
+func launch(entry model.Entry, background bool) error {
 	path := cleanInput(entry.Path)
 	if path == "" || strings.ContainsRune(path, 0) || strings.ContainsRune(entry.Args, 0) {
 		return errors.New("invalid launch path or arguments")
@@ -138,7 +160,9 @@ func Launch(entry model.Entry) error {
 		}
 	}
 	cmd.Env = env
-	if ext == ".bat" || ext == ".cmd" {
+	if background {
+		cmd.SysProcAttr.CreationFlags |= 0x08000000 // CREATE_NO_WINDOW
+	} else if ext == ".bat" || ext == ".cmd" {
 		return startConsole(cmd)
 	}
 	return start(cmd)

@@ -14,8 +14,9 @@ A native desktop launcher for **Windows, macOS, and Linux**, built in Go with [M
 - **Five themes:** Graphite, Paper, Midnight, Forest, and Rose. Change the theme immediately from its preview card. Choose English or Simplified Chinese, adjust fonts, and customize card and sidebar dimensions.
 - **Desktop integration:** tray controls, a global show/hide shortcut, always-on-top mode, hidden startup, remembered window bounds, and paths relative to the executable. Windows supports `.lnk` resolution and UWP entries; other platforms use their own application lists and launch mechanisms.
 - **Local persistence:** SQLite storage with transactional saves, legacy data migration, and protection against replacing unreadable data with an empty state.
+- **Scheduled tasks:** run a program daily at a chosen time, with arguments, enable/disable controls, manual runs, and a searchable paginated list.
 
-Right-click empty space in the card grid to add entries. Right-click empty space in the sidebar to add a group, or right-click a group to rename or remove it. Settings is at the far right of the top tab bar, available from both tabs.
+Right-click empty space in the card grid to add entries. Right-click empty space in the sidebar to add a group, or right-click a group to rename or remove it. Settings is at the far right of the top tab bar, available from every tab.
 
 Settings groups **Appearance** under General; **Layout, Behavior, and Hotkey** under Launcher; **Resource import** under Resources; and **About** under Information. About shows the application version, Go version, platform, and the dependency versions embedded in the executable. Wide windows use a scrollable sidebar; narrow windows use a category selector. Changes save automatically, except the global hotkey, which needs **Apply** to validate registration. The entry editor adapts to smaller windows while keeping its save button visible.
 
@@ -23,9 +24,19 @@ Settings groups **Appearance** under General; **Layout, Behavior, and Hotkey** u
 
 More previews: [themes](docs/themes-preview.png), [search](docs/search-preview.png), [entry editor](docs/editor-preview.png), and [drag reordering](docs/drag-preview.png). The previews are rendered with MyGo's headless UI tester and sample data. A detailed feature comparison and validation record is available in [Chinese](docs/FEATURES.md).
 
+## Scheduled tasks
+
+Open **Scheduled tasks → Add task**, enter a name, daily time in 24-hour `HH:MM` format, program path, and optional arguments, then save. Browse resolves Windows shortcuts to their target. Windows supports `.exe`, `.com`, `.bat`, and `.cmd`; scheduled console programs and scripts run without opening a console window. Relative program paths are resolved from the launcher's directory.
+
+The list supports name/path search, 20 tasks per page, editing, deletion, enable/disable, and **Run now**. It shows the next scheduled time and latest launch result. A successful result means the operating system accepted the launch, not that the program finished successfully. Manual runs also work for disabled tasks and do not replace the day's scheduled run.
+
+Tasks use the computer's local clock and continue while the launcher is hidden in the tray. Keep the launcher running: exiting it stops scheduling, and missed minutes during exit or sleep are skipped. Each task is automatically attempted at most once per day, including failed launches; the daily claim is saved before starting the program to prevent duplicate attempts after a restart. If this save fails, the program is not launched. Task definitions and their latest results persist in the local SQLite database.
+
+![Scheduled tasks with sample data](docs/schedule-preview.png)
+
 ## MCP and skill library
 
-The top tabs switch between **Launcher** and **MCP / Skills**, preserving launcher search and group state. The library has search, type filters, and a single scrolling list. Rows are spaced apart and highlight on hover; click anywhere on a row to toggle its selection. Multiple selections persist across searches, with no checkboxes or pagination.
+The top tabs switch between **Launcher**, **MCP / Skills**, and **Scheduled tasks**, preserving launcher search and group state. The library has search, type filters, and a single scrolling list. Rows are spaced apart and highlight on hover; click anywhere on a row to toggle its selection. Multiple selections persist across searches, with no checkboxes or pagination.
 
 Use **Add MCP** to save a named server with YAML fields `command`, `args`, `env`, `cwd`, or HTTP `url` and `headers`. Use **Add Skill** to import a directory containing `SKILL.md` with `name` and `description` frontmatter. The library references that directory directly without copying files. Deployment reads the current source contents; copies containing nested symlinks are rejected and limited to 100 MiB and 10,000 paths.
 
