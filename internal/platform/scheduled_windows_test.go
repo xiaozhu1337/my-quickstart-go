@@ -52,6 +52,37 @@ func TestScheduledBatchHasNoConsole(t *testing.T) {
 	}
 }
 
+func TestScheduledExecutableHasNoConsole(t *testing.T) {
+	dir := scratchDir(t)
+	program, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ext := range []string{".exe", ".com"} {
+		t.Run(ext, func(t *testing.T) {
+			// Copy the console test executable to exercise paths containing spaces.
+			path := filepath.Join(dir, "scheduled program"+ext)
+			data, err := os.ReadFile(program)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, data, 0700); err != nil {
+				t.Fatal(err)
+			}
+			output := filepath.Join(dir, "result"+ext)
+			if err := LaunchScheduled(model.Entry{
+				Path: path, Args: "-test.run=^TestScheduledChild$",
+				EnvVars: []string{"QUICKSTART_SCHEDULE_RESULT=" + output, "QUICKSTART_SCHEDULE_ARG=executable"},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.TrimSpace(string(waitForFile(t, output))); got != "hidden|"+dir+"|executable" {
+				t.Fatalf("scheduled executable result: %q", got)
+			}
+		})
+	}
+}
+
 func TestScheduledRejectsMissingProgramsAndDirectories(t *testing.T) {
 	dir := scratchDir(t)
 	for _, path := range []string{dir, filepath.Join(dir, "missing.exe")} {

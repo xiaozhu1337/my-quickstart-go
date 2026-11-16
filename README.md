@@ -18,6 +18,8 @@ A native desktop launcher for **Windows, macOS, and Linux**, built in Go with [M
 
 Right-click empty space in the card grid to add entries. Right-click empty space in the sidebar to add a group, or right-click a group to rename or remove it. Settings is at the far right of the top tab bar, available from every tab.
 
+Under **Settings → Layout → Feature tabs**, turn **Show MCP / Skills** and **Show scheduled tasks** on or off independently. Turning both off leaves only Launcher, removes the entire tab bar, and moves Settings to the bottom of the group sidebar. Turn them back on to restore the tabs. Preferences persist across restarts; older databases show all tabs by default. Hiding a page keeps its data, and enabled scheduled tasks continue running in the background.
+
 Settings groups **Appearance** under General; **Layout, Behavior, and Hotkey** under Launcher; **Resource import** under Resources; and **About** under Information. About shows the application version, Go version, platform, and the dependency versions embedded in the executable. Wide windows use a scrollable sidebar; narrow windows use a category selector. Changes save automatically, except the global hotkey, which needs **Apply** to validate registration. The entry editor adapts to smaller windows while keeping its save button visible.
 
 ![Settings](docs/settings-preview.png)
@@ -83,7 +85,7 @@ Extract the package before running it. Windows packages contain an `.exe`; macOS
 
 ## Build and run
 
-The Go toolchain is managed with [mise](https://mise.jdx.dev/) and pinned to **Go 1.27.3**. Go dependencies are pinned in `go.mod` and `go.sum`. The build script uses only the Python standard library.
+The Go toolchain is managed with [mise](https://mise.jdx.dev/) and pinned to **Go 1.27.3**. The UI uses MyGo **v0.9.1**; dependencies are pinned in `go.mod` and `go.sum`. The build script uses only the Python standard library.
 
 ```sh
 mise install go@1.27.3

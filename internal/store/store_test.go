@@ -23,6 +23,8 @@ func sampleState() model.State {
 	s.Settings.AlwaysOnTop = false
 	s.Settings.DblClickBlankToHide = false
 	s.Settings.ReturnToLauncherSeconds = 27
+	s.Settings.HideLibraryTab = true
+	s.Settings.HideScheduleTab = true
 	s.Settings.WindowBounds = &model.Bounds{X: -30, Y: 20, Width: 800, Height: 600}
 	return s
 }

@@ -160,6 +160,17 @@ func (a *App) appearanceSettings(c *ui.Context) {
 
 func (a *App) layoutSettings(c *ui.Context) {
 	s := &a.state.Settings
+	a.settingsSection(c, a.text("功能标签页", "Feature tabs"), a.text("应用启动始终保留；只有应用启动时自动隐藏标签栏。", "Launcher stays available; its tab bar is hidden when it is the only page."), func() {
+		showLibrary, showSchedule := !s.HideLibraryTab, !s.HideScheduleTab
+		if a.settingSwitch(c, a.text("显示 MCP / Skills", "Show MCP / Skills"), a.text("隐藏后仍保留资源，可随时重新显示。", "Keep resources when hidden and show the page again at any time."), &showLibrary) {
+			s.HideLibraryTab = !showLibrary
+			a.changed()
+		}
+		if a.settingSwitch(c, a.text("显示定时任务", "Show scheduled tasks"), a.text("仅隐藏页面，已启用的定时任务仍在后台执行。", "Hide the page while enabled tasks continue running in the background."), &showSchedule) {
+			s.HideScheduleTab = !showSchedule
+			a.changed()
+		}
+	})
 	a.settingsSection(c, a.text("应用卡片", "Shortcut cards"), a.text("尺寸以设备无关像素计算。", "Sizes use device-independent pixels."), func() {
 		a.settingNumber(c, a.text("卡片宽度", "Card width"), &s.CardWidth, 50, 480, 2)
 		a.settingNumber(c, a.text("卡片高度", "Card height"), &s.CardHeight, 40, 360, 2)
@@ -264,6 +275,14 @@ func (a *App) settingRow(c *ui.Context, label, hint string, control func()) {
 }
 
 func (a *App) settingToggle(c *ui.Context, label, hint string, value *bool) bool {
+	if a.settingSwitch(c, label, hint, value) {
+		a.changed()
+		return true
+	}
+	return false
+}
+
+func (a *App) settingSwitch(c *ui.Context, label, hint string, value *bool) bool {
 	row := ui.SwitchBase(c, value).Label(label).Gap(16).AlignItems(ui.Center).Radius(6).Padding(4, 0)
 	row.Children(func() {
 		ui.Column(c).Grow(1).Gap(4).Children(func() {
@@ -278,11 +297,7 @@ func (a *App) settingToggle(c *ui.Context, label, hint string, value *bool) bool
 			ui.Box(c).Size(16, 16).Radius(8).Background(ui.Hex("#ffffff"))
 		})
 	})
-	if row.Changed() {
-		a.changed()
-		return true
-	}
-	return false
+	return row.Changed()
 }
 
 func (a *App) settingNumber(c *ui.Context, label string, value *float64, min, max, step float64) {

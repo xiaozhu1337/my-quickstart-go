@@ -16,6 +16,8 @@
 
 设置入口位于顶部标签栏最右侧，在应用启动、MCP / Skills 和定时任务页都可打开；返回时保留原来所在页面。在分类侧栏空白处右键选择“添加分类”，分类自身的右键菜单可重命名、移除。窗口、托盘和应用文件统一使用蓝色四格图标：Windows 标题栏与任务栏设置原生图标，exe 内嵌七档尺寸资源，macOS 应用包提供 ICNS 并设置 Dock 图标。Linux 通过 GTK 设置默认及窗口图标，显示位置由桌面环境决定。
 
+在 **设置 → 布局 → 功能标签页** 中，可分别关闭“显示 MCP / Skills”和“显示定时任务”。两项都关闭后只保留应用启动，顶部标签栏整体隐藏，设置入口移到分类侧栏底部；重新打开开关即可恢复标签。设置会自动保存，旧版本数据默认显示所有标签。隐藏页面保留已有资源和任务，已启用的定时任务仍会在后台执行。
+
 ![设置界面](docs/settings-preview.png)
 
 搜索与编辑器预览：[搜索匹配与灰色分类](docs/search-preview.png)、[加宽应用编辑框](docs/editor-preview.png)。
@@ -105,7 +107,7 @@ Windows 双击 exe；macOS 通过 Finder 打开 `.app`；Linux 在桌面会话�
 
 ## 开发与构建
 
-Go 工具链通过 [mise](https://mise.jdx.dev/) 管理，版本固定为 1.27.3；MyGo 和 SQLite 依赖由 `go.mod` / `go.sum` 锁定。构建脚本仅使用 Python 标准库。
+Go 工具链通过 [mise](https://mise.jdx.dev/) 管理，版本固定为 1.27.3；MyGo 使用 v0.9.1 稳定版，依赖由 `go.mod` / `go.sum` 锁定。构建脚本仅使用 Python 标准库。
 
 界面回归使用 [MyGo `ui.NewTester`](https://mygo.egoist.dev/docs/ui/testing)，不打开窗口，在内存中模拟输入、点击、拖动、滚动、键盘与布局；拖拽测试覆盖 100% / 200% 缩放。运行下面的 `go test` 不会弹出应用窗口。
 

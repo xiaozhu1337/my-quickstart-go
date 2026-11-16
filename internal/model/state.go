@@ -53,6 +53,11 @@ type Settings struct {
 
 	// ReturnToLauncherSeconds is the hidden-window delay before returning to the launcher (1-3600 seconds).
 	ReturnToLauncherSeconds float64 `json:"returnToLauncherSeconds" yaml:"returnToLauncherSeconds"`
+
+	// HideLibraryTab hides the MCP / Skills page without removing its resources.
+	HideLibraryTab bool `json:"hideLibraryTab" yaml:"hideLibraryTab"`
+	// HideScheduleTab hides the scheduled tasks page without stopping enabled tasks.
+	HideScheduleTab bool `json:"hideScheduleTab" yaml:"hideScheduleTab"`
 }
 
 type State struct {

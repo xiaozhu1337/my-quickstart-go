@@ -16,6 +16,9 @@ func (a *App) view(c *ui.Context) {
 	t.Font = fontName(a.state.Settings.FontFamily)
 	c.SetTheme(t)
 	c.Root().Background(t.Background)
+	if a.mainTab == 1 && a.state.Settings.HideLibraryTab || a.mainTab == 2 && a.state.Settings.HideScheduleTab {
+		a.mainTab = 0
+	}
 	if a.mainTab == 0 && !a.settingsOpen && !a.editorOpen && !a.renameOpen && !a.addOpen {
 		c.OnShortcut(ui.Cmd, ui.KeyF, func() {
 			if a.searchOpen {
@@ -31,30 +34,7 @@ func (a *App) view(c *ui.Context) {
 		})
 	}
 	ui.Column(c).Fill().Children(func() {
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-			disabled := a.editorOpen || a.renameOpen || a.addOpen || (a.mainTab == 2 && a.schedule.ModalOpen())
-			selected := a.mainTab
-			if a.settingsOpen {
-				for i, label := range []string{a.text("应用启动", "Launcher"), "MCP / Skills", a.text("定时任务", "Scheduled tasks")} {
-					button := ui.ButtonBase(c.Key("settings-return-"+label)).Padding(10, 12).Label(label).Disabled(disabled)
-					button.Children(func() { ui.Text(c, label).TextColor(t.TextMuted) })
-					if button.Clicked() {
-						a.mainTab, a.settingsOpen = i, false
-					}
-				}
-			} else if ui.Tabs(c, &selected, a.text("应用启动", "Launcher"), "MCP / Skills", a.text("定时任务", "Scheduled tasks")).Disabled(disabled).Changed() {
-				a.mainTab, a.settingsOpen = selected, false
-			}
-			ui.Box(c).Grow(1)
-			button := ui.Button(c, a.text("设置", "Settings")).Margin(0, 12).Disabled(disabled)
-			if a.settingsOpen {
-				button.Background(t.Accent.Alpha(0.14))
-			}
-			if button.Clicked() {
-				a.openSettings()
-			}
-		})
-		ui.Divider(c)
+		a.mainTabsView(c)
 		if a.library != nil {
 			a.library.Language = a.state.Settings.Language
 		}
@@ -112,6 +92,53 @@ func (a *App) view(c *ui.Context) {
 	for _, fn := range actions {
 		fn()
 	}
+}
+
+func (a *App) launcherOnly() bool {
+	return a.state.Settings.HideLibraryTab && a.state.Settings.HideScheduleTab
+}
+
+func (a *App) mainTabsView(c *ui.Context) {
+	if a.launcherOnly() {
+		return
+	}
+	labels := []string{a.text("应用启动", "Launcher")}
+	ids := []int{0}
+	if !a.state.Settings.HideLibraryTab {
+		labels, ids = append(labels, "MCP / Skills"), append(ids, 1)
+	}
+	if !a.state.Settings.HideScheduleTab {
+		labels, ids = append(labels, a.text("定时任务", "Scheduled tasks")), append(ids, 2)
+	}
+	selected := 0
+	for i, id := range ids {
+		if id == a.mainTab {
+			selected = i
+		}
+	}
+	ui.Row(c).Label(a.text("主导航", "Main navigation")).FillWidth().AlignItems(ui.Center).Children(func() {
+		disabled := a.editorOpen || a.renameOpen || a.addOpen || (a.mainTab == 2 && a.schedule.ModalOpen())
+		if a.settingsOpen {
+			for i, label := range labels {
+				button := ui.ButtonBase(c.Key("settings-return-"+label)).Padding(10, 12).Label(label).Disabled(disabled)
+				button.Children(func() { ui.Text(c, label).TextColor(c.Theme().TextMuted) })
+				if button.Clicked() {
+					a.mainTab, a.settingsOpen = ids[i], false
+				}
+			}
+		} else if ui.Tabs(c, &selected, labels...).Disabled(disabled).Changed() {
+			a.mainTab, a.settingsOpen = ids[selected], false
+		}
+		ui.Box(c).Grow(1)
+		button := ui.Button(c, a.text("设置", "Settings")).Margin(0, 12).Disabled(disabled)
+		if a.settingsOpen {
+			button.Background(c.Theme().Accent.Alpha(0.14))
+		}
+		if button.Clicked() {
+			a.openSettings()
+		}
+	})
+	ui.Divider(c)
 }
 
 func fontName(name string) string {
@@ -209,6 +236,12 @@ func (a *App) sidebarView(c *ui.Context) {
 				a.importPaths(paths, g.ID, "")
 			}
 		}).Grow(1)
+		if a.launcherOnly() {
+			ui.Divider(c)
+			if ui.Button(c, a.text("设置", "Settings")).FillWidth().Height(36).Disabled(a.editorOpen || a.renameOpen || a.addOpen).Clicked() {
+				a.openSettings()
+			}
+		}
 	})
 }
 
