@@ -62,7 +62,20 @@ func Launch(entry model.Entry) error {
 	return start(cmd)
 }
 
-func LaunchScheduled(entry model.Entry) error { return Launch(entry) }
+func LaunchScheduled(entry model.Entry) error {
+	if (model.ScheduledTask{Path: entry.Path}).IsPython() {
+		return launchPython(entry, "")
+	}
+	return Launch(entry)
+}
+
+func pythonCommand(python, script, raw string) (*exec.Cmd, error) {
+	args, err := splitArgs(raw)
+	if err != nil {
+		return nil, err
+	}
+	return exec.Command(python, append([]string{script}, args...)...), nil
+}
 
 func start(cmd *exec.Cmd) error {
 	if err := cmd.Start(); err != nil {

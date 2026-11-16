@@ -19,6 +19,22 @@ func TestDailyTimeValidation(t *testing.T) {
 	}
 }
 
+func TestPythonTaskValidation(t *testing.T) {
+	task := ScheduledTask{ID: "python", Name: "Python", Time: "09:00", Path: "job.py"}
+	for _, path := range []string{"job.py", "job.PYW", `"C:\my tasks\job.py"`} {
+		task.Path = path
+		if !task.IsPython() || task.Validate() != nil {
+			t.Fatal("valid Python script rejected", task)
+		}
+	}
+	for _, interpreter := range []string{"python\x00.exe", "python\n.exe", "python\r.exe"} {
+		task.PythonPath = interpreter
+		if task.Validate() == nil {
+			t.Fatal("invalid interpreter accepted")
+		}
+	}
+}
+
 func TestDailyTaskClockAndRestart(t *testing.T) {
 	zone := time.FixedZone("local", 8*60*60)
 	now := time.Date(2026, 11, 16, 9, 30, 40, 0, zone)

@@ -28,7 +28,9 @@ More previews: [themes](docs/themes-preview.png), [search](docs/search-preview.p
 
 ## Scheduled tasks
 
-Open **Scheduled tasks → Add task**, enter a name, daily time in 24-hour `HH:MM` format, program path, and optional arguments, then save. Browse resolves Windows shortcuts to their target. Windows supports `.exe`, `.com`, `.bat`, and `.cmd`; scheduled console programs and scripts run without opening a console window. Relative program paths are resolved from the launcher's directory.
+Open **Scheduled tasks → Add task**, enter a name, daily time in 24-hour `HH:MM` format, program or script path, and optional arguments, then save. Browse resolves Windows shortcuts to their target. Windows supports `.exe`, `.com`, `.bat`, `.cmd`, `.py`, and `.pyw`; scheduled console programs and scripts run without opening a console window. Relative program paths are resolved from the launcher's directory.
+
+For `.py` / `.pyw` files, optionally enter or browse for a **Python interpreter**, including a mise installation or a virtual environment's `python.exe`. Leave it empty to search PATH for `python`, then `python3`. Keep the interpreter and script paths in their own fields; arguments are passed to the script, so do not repeat its filename. Quote arguments containing spaces. The working directory is the script's folder. Interpreter selection persists with the task and applies to both manual and scheduled runs. A missing interpreter produces a launch failure. If Python exits with an error, up to the last 8 KiB of stderr is written asynchronously to the application's rotating `logs` directory; the list continues to report launch status only.
 
 The list supports name/path search, 20 tasks per page, editing, deletion, enable/disable, and **Run now**. It shows the next scheduled time and latest launch result. A successful result means the operating system accepted the launch, not that the program finished successfully. Manual runs also work for disabled tasks and do not replace the day's scheduled run.
 

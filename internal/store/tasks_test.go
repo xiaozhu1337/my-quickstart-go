@@ -14,6 +14,7 @@ func TestScheduledTasksPersistAndRollback(t *testing.T) {
 		{ID: "daily", Name: "每日备份", Time: "23:59", Path: `C:\工具\backup.exe`, Args: `--name "中文 空格"`, Enabled: true,
 			LastScheduledDate: "2026-11-16", LastRunAt: 1794830000000, LastStatus: "failed", LastError: "file not found"},
 		{ID: "disabled", Name: "Disabled", Time: "00:00", Path: "other.cmd"},
+		{ID: "python", Name: "Python script", Time: "12:00", Path: `C:\scripts\task.py`, PythonPath: `C:\virtual env\Scripts\python.exe`, Args: `--value "two words"`, Enabled: true},
 	}
 	if err := s.Save(state); err != nil {
 		t.Fatal(err)
@@ -59,6 +60,36 @@ func TestScheduledTasksPersistAndRollback(t *testing.T) {
 	if err != nil || len(got.Tasks) != 0 {
 		t.Fatal("deletion did not persist", err)
 	}
+}
+
+func TestTasksWithoutPythonColumnRemainReadable(t *testing.T) {
+	s := openTestStore(t)
+	want := sampleState()
+	want.Tasks = []model.ScheduledTask{{ID: "legacy", Name: "Legacy", Path: "app.exe", Time: "09:00", Enabled: true, LastScheduledDate: "2026-11-16"}}
+	if err := s.Save(want); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec("ALTER TABLE scheduled_tasks DROP COLUMN python_path"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertState(t, want, got)
+	var count int
+	if err := s.db.QueryRow("SELECT count(*) FROM pragma_table_info('scheduled_tasks') WHERE name = 'python_path'").Scan(&count); err != nil || count != 0 {
+		t.Fatal("loading must not modify the old schema", count, err)
+	}
+	want.Tasks = append(want.Tasks, model.ScheduledTask{ID: "python", Name: "Python", Path: "task.py", PythonPath: "venv/python.exe", Time: "10:00"})
+	if err := s.Save(want); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertState(t, want, got)
 }
 
 func TestExistingDatabaseWithoutTasksRemainsReadable(t *testing.T) {

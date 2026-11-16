@@ -56,7 +56,7 @@ func TestTaskEditorAndListActions(t *testing.T) {
 		}
 		click(t, tt, "Enable")
 		calls := 0
-		p.launch = func(entry model.Entry) error {
+		p.launch = func(entry model.ScheduledTask) error {
 			calls++
 			if entry.Path != "backup.exe" {
 				t.Fatal("wrong program", entry)
@@ -99,7 +99,7 @@ func TestDailyDispatchFailureAndRestart(t *testing.T) {
 	var snapshot []model.ScheduledTask
 	p.flush = func() error { snapshot = append([]model.ScheduledTask(nil), (*p.tasks)...); return nil }
 	calls := 0
-	p.launch = func(entry model.Entry) error {
+	p.launch = func(entry model.ScheduledTask) error {
 		calls++
 		if snapshot[calls-1].LastScheduledDate != "2026-11-16" {
 			t.Fatal("launch occurred before claim persisted")
@@ -112,10 +112,10 @@ func TestDailyDispatchFailureAndRestart(t *testing.T) {
 		t.Fatal("all due tasks must launch once and preserve errors", calls, *p.tasks)
 	}
 	restarted := New(&snapshot, func() {}, nil)
-	restarted.launch = func(model.Entry) error { t.Fatal("restarted task repeated"); return nil }
+	restarted.launch = func(model.ScheduledTask) error { t.Fatal("restarted task repeated"); return nil }
 	restarted.tick(now.Add(20 * time.Second))
 	startedTomorrow := 0
-	restarted.launch = func(model.Entry) error { startedTomorrow++; return nil }
+	restarted.launch = func(model.ScheduledTask) error { startedTomorrow++; return nil }
 	restarted.tick(now.AddDate(0, 0, 1))
 	if startedTomorrow != 2 {
 		t.Fatal("tasks must run again tomorrow")
@@ -131,7 +131,7 @@ func TestSaveFailurePreventsProgramLaunch(t *testing.T) {
 	p := testPanel()
 	*p.tasks = []model.ScheduledTask{{ID: "task", Name: "Task", Time: "09:30", Path: "app.exe", Enabled: true}}
 	p.flush = func() error { return errors.New("disk full") }
-	p.launch = func(model.Entry) error { t.Fatal("must not launch after save failure"); return nil }
+	p.launch = func(model.ScheduledTask) error { t.Fatal("must not launch after save failure"); return nil }
 	p.tick(time.Date(2026, 11, 16, 9, 30, 0, 0, time.Local))
 	if (*p.tasks)[0].LastStatus != "failed" || p.Busy() {
 		t.Fatal("save failure must release busy state and remain visible")

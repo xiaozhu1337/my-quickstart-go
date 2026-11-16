@@ -112,9 +112,20 @@ func LaunchScheduled(entry model.Entry) error {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".exe", ".com", ".bat", ".cmd":
 		return launch(entry, true)
+	case ".py", ".pyw":
+		return launchPython(entry, "")
 	default:
-		return errors.New("scheduled program must be an .exe, .com, .bat or .cmd file")
+		return errors.New("scheduled program must be an .exe, .com, .bat, .cmd, .py or .pyw file")
 	}
+}
+
+func pythonCommand(python, script, args string) (*exec.Cmd, error) {
+	cmd := exec.Command(python)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CmdLine:       commandLine(python, commandLine(script, args)),
+		CreationFlags: 0x08000000, // CREATE_NO_WINDOW
+	}
+	return cmd, nil
 }
 
 func launch(entry model.Entry, background bool) error {

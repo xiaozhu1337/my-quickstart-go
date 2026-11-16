@@ -19,7 +19,7 @@ type Panel struct {
 	tasks    *[]model.ScheduledTask
 	changed  func()
 	flush    func() error
-	launch   func(model.Entry) error
+	launch   func(model.ScheduledTask) error
 	dispatch func(func())
 	timer    *time.Timer
 	stopped  bool
@@ -38,7 +38,7 @@ type Panel struct {
 }
 
 func New(tasks *[]model.ScheduledTask, changed func(), flush func() error) *Panel {
-	return &Panel{tasks: tasks, changed: changed, flush: flush, launch: platform.LaunchScheduled,
+	return &Panel{tasks: tasks, changed: changed, flush: flush, launch: platform.LaunchScheduledTask,
 		running: map[string]bool{}, slots: make(chan struct{}, 4)}
 }
 
@@ -109,7 +109,7 @@ func (p *Panel) run(id string, now time.Time, scheduled bool) {
 		task.LastScheduledDate = now.Format(time.DateOnly)
 	}
 	task.LastRunAt, task.LastStatus, task.LastError = now.UnixMilli(), "starting", ""
-	entry := model.Entry{Name: task.Name, Path: task.Path, Args: task.Args}
+	snapshot := *task
 	p.changed()
 	work := func() error {
 		// Persist the claim before starting the program, so a restart cannot repeat it.
@@ -118,7 +118,7 @@ func (p *Panel) run(id string, now time.Time, scheduled bool) {
 				return fmt.Errorf("save scheduled task before launch: %w", err)
 			}
 		}
-		return p.launch(entry)
+		return p.launch(snapshot)
 	}
 	if p.dispatch == nil {
 		p.finish(id, work())
@@ -217,6 +217,13 @@ func (p *Panel) taskRow(c *ui.Context, task model.ScheduledTask, now time.Time) 
 			path += "  " + task.Args
 		}
 		ui.Text(c, path).SingleLine().Tooltip(path).FontSize(11).TextColor(c.Theme().TextMuted)
+		if task.IsPython() {
+			interpreter := task.PythonPath
+			if interpreter == "" {
+				interpreter = p.tr("自动查找（PATH）", "Find on PATH")
+			}
+			ui.Text(c, "Python: "+interpreter).SingleLine().Tooltip(interpreter).FontSize(11).TextColor(c.Theme().TextMuted)
+		}
 		status := p.tr("尚未执行", "Not run yet")
 		if task.LastRunAt != 0 {
 			result := p.tr("已启动", "Started")
