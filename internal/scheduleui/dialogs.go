@@ -1,29 +1,24 @@
 package scheduleui
 
 import (
-	"log"
 	"strings"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"my-quickstart-go/internal/model"
 	"my-quickstart-go/internal/platform"
 )
 
 func (p *Panel) edit(task model.ScheduledTask) {
+	task.Command = platform.ScheduledCommand(task)
 	p.draft, p.failure, p.editOpen = task, "", true
 }
 
 func (p *Panel) save() {
 	task := p.draft
 	task.Name, task.Time = strings.TrimSpace(task.Name), strings.TrimSpace(task.Time)
-	task.Path = strings.Trim(strings.TrimSpace(task.Path), "\"")
-	task.PythonPath = strings.Trim(strings.TrimSpace(task.PythonPath), "\"")
-	if !task.IsPython() {
-		task.PythonPath = ""
-	}
-	if task.Name == "" || task.Path == "" {
-		p.failure = p.tr("请填写任务名称和程序路径。", "Enter a task name and program path.")
+	task.Command = strings.TrimSpace(task.Command)
+	if task.Name == "" || task.Command == "" {
+		p.failure = p.tr("请填写任务名称和执行命令。", "Enter a task name and command.")
 		return
 	}
 	if _, err := model.ParseDailyTime(task.Time); err != nil {
@@ -33,8 +28,14 @@ func (p *Panel) save() {
 	if task.ID == "" {
 		task.ID = model.ID()
 	}
+	// Editing only a name/time must preserve old interpreter lookup and working directory.
+	if old := p.task(task.ID); old != nil && task.Command == platform.ScheduledCommand(*old) {
+		task.Command, task.Path, task.Args, task.PythonPath = old.Command, old.Path, old.Args, old.PythonPath
+	} else {
+		task.Path, task.Args, task.PythonPath = "", "", ""
+	}
 	if err := task.Validate(); err != nil {
-		p.failure = p.tr("路径、解释器和参数不能包含换行或空字符。", "Paths, interpreter and arguments cannot contain newlines or NUL.")
+		p.failure = p.tr("执行命令不能包含换行或空字符。", "The command cannot contain newlines or NUL.")
 		return
 	}
 	if old := p.task(task.ID); old != nil {
@@ -66,37 +67,21 @@ func (p *Panel) dialogs(c *ui.Context) {
 				ui.TextInput(c, &p.draft.Name).Label(p.tr("任务名称", "Task name")).AutoFocus()
 				ui.Text(c, p.tr("每天执行时间（24 小时制）", "Daily time (24-hour clock)"))
 				ui.TextInput(c, &p.draft.Time).Label(p.tr("执行时间", "Time")).Placeholder("09:30")
-				ui.Text(c, p.tr("程序或脚本路径", "Program or script path"))
-				ui.Row(c).Gap(8).Children(func() {
-					ui.TextInput(c, &p.draft.Path).Label(p.tr("程序或脚本路径", "Program or script path")).Grow(1)
-					if ui.Button(c, p.tr("浏览…", "Browse…")).Disabled(p.picking).Clicked() {
-						p.pickFile(false)
-					}
-				})
-				if p.draft.IsPython() {
-					ui.Text(c, p.tr("Python 解释器（可选）", "Python interpreter (optional)"))
-					ui.Row(c).Gap(8).Children(func() {
-						ui.TextInput(c, &p.draft.PythonPath).Label(p.tr("Python 解释器", "Python interpreter")).Placeholder(p.tr("留空从 PATH 查找", "Find on PATH when empty")).Grow(1)
-						if ui.Button(c, p.tr("选择解释器…", "Choose Python…")).Disabled(p.picking).Clicked() {
-							p.pickFile(true)
-						}
-					})
-					ui.Text(c, p.tr("可选择虚拟环境中的 python.exe。工作目录为脚本所在目录。", "You can select a virtual environment's Python. The working directory is the script's folder.")).FontSize(11).TextColor(c.Theme().TextMuted)
-				}
-				ui.Text(c, p.tr("启动参数（可选）", "Arguments (optional)"))
-				ui.TextInput(c, &p.draft.Args).Label(p.tr("启动参数", "Arguments"))
+				ui.Text(c, p.tr("执行命令（含参数）", "Command (including arguments)"))
+				ui.TextInput(c, &p.draft.Command).Label(p.tr("执行命令", "Command")).Placeholder(`python C:\scripts\task.py`)
+				ui.Text(c, p.tr("直接输入完整命令，含空格的路径请加双引号。", "Enter the complete command. Put paths containing spaces in double quotes.")).FontSize(11).TextColor(c.Theme().TextMuted)
 				ui.Checkbox(c, &p.draft.Enabled, p.tr("启用此任务", "Enable this task"))
-				ui.Text(c, p.tr("支持程序及 .bat / .cmd / .py / .pyw 脚本；后台运行，不弹出控制台窗口。", "Supports programs and .bat / .cmd / .py / .pyw scripts, without a console window.")).FontSize(11).TextColor(c.Theme().TextMuted)
+				ui.Text(c, p.tr("后台运行，不弹出控制台。相对路径以本程序所在目录为起点。", "Runs without a console. Relative paths start in this application's folder.")).FontSize(11).TextColor(c.Theme().TextMuted)
 			})
 		})
 		if p.failure != "" {
 			ui.Text(c, p.failure).TextColor(c.Theme().Danger).MaxHeight(48)
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, p.tr("取消", "Cancel")).Disabled(p.picking).Clicked() {
+			if ui.Button(c, p.tr("取消", "Cancel")).Clicked() {
 				p.editOpen = false
 			}
-			if ui.PrimaryButton(c, p.tr("保存", "Save")).Disabled(p.picking || p.running[p.draft.ID]).Clicked() {
+			if ui.PrimaryButton(c, p.tr("保存", "Save")).Disabled(p.running[p.draft.ID]).Clicked() {
 				p.pending = append(p.pending, p.save)
 			}
 		})
@@ -129,38 +114,4 @@ func (p *Panel) remove() {
 		}
 	}
 	p.removing = false
-}
-
-func (p *Panel) pickFile(interpreter bool) {
-	if p.Window == nil {
-		return
-	}
-	p.picking = true
-	title := p.tr("选择程序或脚本", "Choose a program or script")
-	if interpreter {
-		title = p.tr("选择 Python 解释器", "Choose a Python interpreter")
-	}
-	go func() {
-		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: p.Window, Title: title})
-		var entry model.Entry
-		if err == nil && len(paths) > 0 {
-			entry, err = platform.Resolve(paths[0], false)
-		}
-		p.Window.Update(func() {
-			p.picking = false
-			if err != nil {
-				p.failure = err.Error()
-				log.Printf("choose scheduled program: %v", err)
-			} else if p.editOpen && entry.Path != "" {
-				if interpreter {
-					p.draft.PythonPath = entry.Path
-					return
-				}
-				p.draft.Path, p.draft.Args = entry.Path, entry.Args
-				if strings.TrimSpace(p.draft.Name) == "" {
-					p.draft.Name = entry.Name
-				}
-			}
-		})
-	}()
 }

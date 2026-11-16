@@ -58,6 +58,14 @@ func commandProcess(command string) *exec.Cmd {
 	return cmd
 }
 
+func scheduledCommand(command string) *exec.Cmd {
+	cmd := commandProcess(command)
+	cmd.SysProcAttr.CreationFlags = 0x08000000 // CREATE_NO_WINDOW
+	return cmd
+}
+
+func quoteScheduledPath(path string) string { return `"` + path + `"` }
+
 // startConsole lets Windows initialize real console handles. exec.Cmd instead
 // supplies NUL handles when its standard streams are unset, leaving a blank window.
 func startConsole(cmd *exec.Cmd) error {

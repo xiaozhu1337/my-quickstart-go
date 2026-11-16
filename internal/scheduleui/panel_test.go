@@ -38,7 +38,7 @@ func TestTaskEditorAndListActions(t *testing.T) {
 		click(t, tt, "Time")
 		tt.Key(ui.Cmd, ui.KeyA)
 		tt.Type("25:00")
-		p.draft.Path = "backup.exe"
+		p.draft.Command = "backup.exe --daily"
 		click(t, tt, "Save")
 		if !p.editOpen || len(*p.tasks) != 0 {
 			t.Fatal("invalid time must not save")
@@ -58,7 +58,7 @@ func TestTaskEditorAndListActions(t *testing.T) {
 		calls := 0
 		p.launch = func(entry model.ScheduledTask) error {
 			calls++
-			if entry.Path != "backup.exe" {
+			if entry.Command != "backup.exe --daily" {
 				t.Fatal("wrong program", entry)
 			}
 			return nil

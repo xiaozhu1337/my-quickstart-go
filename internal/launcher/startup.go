@@ -97,6 +97,7 @@ func (a *App) finishHiddenReturn(generation uint64, now time.Time) {
 	}
 	a.cancelHiddenReturn()
 	a.mainTab, a.settingsOpen = 0, false
+	a.schedule.ResetView()
 	if a.library != nil {
 		a.library.ClearSelection()
 	}

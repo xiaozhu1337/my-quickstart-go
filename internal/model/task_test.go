@@ -19,6 +19,22 @@ func TestDailyTimeValidation(t *testing.T) {
 	}
 }
 
+func TestCommandTaskValidation(t *testing.T) {
+	task := ScheduledTask{ID: "command", Name: "Command", Time: "09:00"}
+	for _, command := range []string{`python C:\xx.py`, `"C:\Python env\python.exe" "C:\脚本\daily task.py" --flag`, `echo example > output.txt`} {
+		task.Command = command
+		if err := task.Validate(); err != nil {
+			t.Fatal("valid command rejected", err)
+		}
+	}
+	for _, command := range []string{"", "  ", "python\x00test.py", "echo a\necho b", "echo a\recho b"} {
+		task.Command = command
+		if task.Validate() == nil {
+			t.Fatal("invalid command accepted", command)
+		}
+	}
+}
+
 func TestPythonTaskValidation(t *testing.T) {
 	task := ScheduledTask{ID: "python", Name: "Python", Time: "09:00", Path: "job.py"}
 	for _, path := range []string{"job.py", "job.PYW", `"C:\my tasks\job.py"`} {

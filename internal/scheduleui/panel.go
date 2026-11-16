@@ -33,7 +33,6 @@ type Panel struct {
 	removing bool
 	draft    model.ScheduledTask
 	failure  string
-	picking  bool
 	pending  []func()
 }
 
@@ -51,6 +50,14 @@ func (p *Panel) tr(zh, en string) string {
 
 func (p *Panel) Busy() bool      { return len(p.running) != 0 }
 func (p *Panel) ModalOpen() bool { return p.editOpen || p.removing }
+
+// ResetView discards transient UI state without stopping schedules or active launches.
+func (p *Panel) ResetView() {
+	p.editOpen, p.removing = false, false
+	p.draft = model.ScheduledTask{}
+	p.failure, p.removeID, p.query = "", "", ""
+	p.page, p.list, p.pending = 0, ui.ListState{}, nil
+}
 
 func (p *Panel) Start(window *mygo.Window) {
 	if p.dispatch != nil {
@@ -149,7 +156,7 @@ func (p *Panel) finish(id string, err error) {
 func (p *Panel) View(c *ui.Context) {
 	ui.Column(c).FillWidth().Grow(1).Padding(16).Gap(10).Children(func() {
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-			if ui.TextInput(c, &p.query).Label(p.tr("搜索任务", "Search tasks")).Placeholder(p.tr("搜索名称或程序路径", "Search name or program path")).Grow(1).Changed() {
+			if ui.TextInput(c, &p.query).Label(p.tr("搜索任务", "Search tasks")).Placeholder(p.tr("搜索名称或执行命令", "Search name or command")).Grow(1).Changed() {
 				p.page = 0
 			}
 			if ui.PrimaryButton(c, p.tr("新增任务", "Add task")).Clicked() {
@@ -173,7 +180,7 @@ func (p *Panel) taskList(c *ui.Context) {
 	var matches []int
 	query := strings.ToLower(strings.TrimSpace(p.query))
 	for i, task := range *p.tasks {
-		if strings.Contains(strings.ToLower(task.Name+" "+task.Path), query) {
+		if strings.Contains(strings.ToLower(task.Name+" "+platform.ScheduledCommand(task)), query) {
 			matches = append(matches, i)
 		}
 	}
@@ -192,7 +199,7 @@ func (p *Panel) taskList(c *ui.Context) {
 		}
 	})
 	if len(matches) == 0 {
-		message := p.tr("暂无定时任务，点击“新增任务”设置执行时间和程序。", "No scheduled tasks. Add a task to choose a time and program.")
+		message := p.tr("暂无定时任务，点击“新增任务”设置时间和执行命令。", "No scheduled tasks. Add a task to choose a time and command.")
 		if query != "" {
 			message = p.tr("没有匹配的任务。", "No matching tasks.")
 		}
@@ -212,18 +219,8 @@ func (p *Panel) taskRow(c *ui.Context, task model.ScheduledTask, now time.Time) 
 			ui.Text(c, task.Name).Bold().SingleLine().Tooltip(task.Name).Grow(1)
 			ui.Text(c, p.tr("每天 ", "Daily ")+task.Time).TextColor(c.Theme().Accent)
 		})
-		path := task.Path
-		if task.Args != "" {
-			path += "  " + task.Args
-		}
-		ui.Text(c, path).SingleLine().Tooltip(path).FontSize(11).TextColor(c.Theme().TextMuted)
-		if task.IsPython() {
-			interpreter := task.PythonPath
-			if interpreter == "" {
-				interpreter = p.tr("自动查找（PATH）", "Find on PATH")
-			}
-			ui.Text(c, "Python: "+interpreter).SingleLine().Tooltip(interpreter).FontSize(11).TextColor(c.Theme().TextMuted)
-		}
+		command := platform.ScheduledCommand(task)
+		ui.Text(c, command).SingleLine().Tooltip(command).FontSize(11).TextColor(c.Theme().TextMuted)
 		status := p.tr("尚未执行", "Not run yet")
 		if task.LastRunAt != 0 {
 			result := p.tr("已启动", "Started")

@@ -1,6 +1,6 @@
 # 功能覆盖与验证记录
 
-Python 定时任务增量验证（2026-11-16）：支持 `.py` / `.pyw`，可选择 Python 解释器（含虚拟环境）或从 PATH 自动查找；脚本以所在目录为工作目录，自动执行与立即执行共用隐藏控制台方式。验证了中文/空格路径、空参数/引号参数、解释器设置保存、旧 SQLite 任务表缺少解释器列的兼容和保存迁移、找不到解释器时的错误提示，以及标准错误末尾 8 KiB 的有界捕获。中英文编辑窗口覆盖 560×380 / 960×620。
+定时任务命令与隐藏恢复增量验证（2026-11-16）：编辑器统一为完整命令输入，如 `python C:\xx.py`，取消程序、参数、解释器分栏和文件选择。Windows 使用隐藏控制台的 `cmd.exe` 执行，新命令以启动器目录为工作目录；支持 PATH、带空格的解释器路径、中文脚本和参数、空参数、批处理，错误日志有界捕获末尾 8 KiB。旧任务合并显示，未改命令时保留原有执行语义；SQLite 缺少命令列时只读兼容，保存时事务迁移。窗口隐藏超时后关闭定时任务新增/编辑/删除弹窗，清除草稿、搜索和分页；提前恢复保留弹窗，后台任务不受重置影响。上述行为及中英文 560×380 / 960×620 界面通过回归测试。
 
 对照来源为旧版 Tauri 启动器中实际接入界面的 Vue/TypeScript 和 Rust 代码。重构保留操作能力，使用 MyGo 原生组件重新布局；旧版的无边框标题栏、弹层拖动、浏览器快捷键屏蔽和拖放缺陷不照搬。
 
@@ -26,12 +26,12 @@ Python 定时任务增量验证（2026-11-16）：支持 `.py` / `.pyw`，可选
 | 中英文、深浅主题、字体、字体大小 | 保留；扩展石墨、纸白、午夜、松林、玫瑰五种主题，点击预览即时应用并自动保存 | `internal/launcher/settings.go`、`theme.go`、`view.go` |
 | 侧栏、卡片宽高、卡片字号、图标大小 | 即时调整及持久化，保留旧范围约束 | `internal/launcher/settings.go`、`internal/model/state.go` |
 | 空白双击隐藏、置顶、启动时隐藏、窗口位置大小 | 保留；恢复时增加屏幕可见性检查 | `internal/launcher/app.go`、`settings.go` |
-| 隐藏后自动返回应用启动 | 设置页或 MCP / Skills 页隐藏后默认 10 秒返回应用启动；提前打开取消，下一次隐藏重新计时；设置 → 行为可调整为 1–3600 秒并自动保存 | `internal/launcher/startup.go`、`settings.go`、`internal/model/state.go` |
+| 隐藏后自动返回应用启动 | 设置页、MCP / Skills 或定时任务页隐藏后默认 10 秒返回应用启动；重置定时任务弹窗、未保存草稿、搜索和分页；提前打开取消，下一次隐藏重新计时；设置 → 行为可调整为 1–3600 秒并自动保存 | `internal/launcher/startup.go`、`settings.go`、`internal/scheduleui/panel.go`、`internal/model/state.go` |
 | 全局显示/隐藏热键、最小化恢复、热键失败保留旧值 | 使用 MyGo 全局快捷键接口 | `internal/launcher/app.go` |
 | 托盘显示/隐藏、退出；普通 X 隐藏 | 退出先保存；无托盘和热键时拒绝隐藏 | `internal/launcher/app.go`、`cmd/quickstart/main.go` |
 | 应用图标 | 统一蓝色四格标识；运行时全局/窗口 PNG，Windows 内嵌七档 ICO 资源，macOS 应用包 ICNS | `internal/branding`、`internal/launcher/app.go`、`scripts/build.py` |
 | SQLite、历史列兼容、旧数据迁移 | 独立新版库，SQLite 一致性读取、事务写入、失败保护 | `internal/store` |
-| 每日定时运行程序 | 独立定时任务标签，时间/程序/参数编辑，启停、立即执行、删除确认、名称/路径搜索及每页 20 项；展示下次时间和最近启动结果 | `internal/scheduleui`、`internal/model/task.go`、`internal/store/tasks.go` |
+| 每日定时运行命令 | 独立定时任务标签，时间和完整命令编辑，启停、立即执行、删除确认、名称/命令搜索及每页 20 项；展示下次时间和最近启动结果 | `internal/scheduleui`、`internal/model/task.go`、`internal/store/tasks.go` |
 
 16 个原设置字段均保留：`language`、`theme`、`fontFamily`、`fontSize`、`sidebarWidth`、`cardWidth`、`cardHeight`、`cardFontSize`、`cardIconScale`、`dblClickBlankToHide`、`alwaysOnTop`、`hideOnStartup`、`useRelativePath`、`rememberWindowBounds`、`windowBounds`、`toggleHotkey`。
 

@@ -15,6 +15,7 @@ func TestScheduledTasksPersistAndRollback(t *testing.T) {
 			LastScheduledDate: "2026-11-16", LastRunAt: 1794830000000, LastStatus: "failed", LastError: "file not found"},
 		{ID: "disabled", Name: "Disabled", Time: "00:00", Path: "other.cmd"},
 		{ID: "python", Name: "Python script", Time: "12:00", Path: `C:\scripts\task.py`, PythonPath: `C:\virtual env\Scripts\python.exe`, Args: `--value "two words"`, Enabled: true},
+		{ID: "command", Name: "Command", Time: "13:00", Command: `python "C:\每日 scripts\backup.py" --name "two words"`, Enabled: true},
 	}
 	if err := s.Save(state); err != nil {
 		t.Fatal(err)
@@ -90,6 +91,48 @@ func TestTasksWithoutPythonColumnRemainReadable(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertState(t, want, got)
+}
+
+func TestTasksWithoutCommandColumnRemainReadable(t *testing.T) {
+	for _, withPython := range []bool{false, true} {
+		t.Run(map[bool]string{false: "original", true: "python"}[withPython], func(t *testing.T) {
+			s := openTestStore(t)
+			want := sampleState()
+			want.Tasks = []model.ScheduledTask{{ID: "legacy", Name: "Legacy", Time: "09:00", Path: "task.py", Args: "--daily", Enabled: true, LastScheduledDate: "2026-11-16"}}
+			if withPython {
+				want.Tasks[0].PythonPath = "venv/python.exe"
+			}
+			if err := s.Save(want); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.db.Exec("ALTER TABLE scheduled_tasks DROP COLUMN command"); err != nil {
+				t.Fatal(err)
+			}
+			if !withPython {
+				if _, err := s.db.Exec("ALTER TABLE scheduled_tasks DROP COLUMN python_path"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := s.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertState(t, want, got)
+			var count int
+			if err := s.db.QueryRow("SELECT count(*) FROM pragma_table_info('scheduled_tasks') WHERE name = 'command'").Scan(&count); err != nil || count != 0 {
+				t.Fatal("load must not modify old schema", count, err)
+			}
+			want.Tasks = append(want.Tasks, model.ScheduledTask{ID: "new", Name: "New", Time: "10:00", Command: `python C:\xx.py`})
+			if err := s.Save(want); err != nil {
+				t.Fatal(err)
+			}
+			got, err = s.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertState(t, want, got)
+		})
+	}
 }
 
 func TestExistingDatabaseWithoutTasksRemainsReadable(t *testing.T) {

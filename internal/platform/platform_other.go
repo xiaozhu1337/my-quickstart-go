@@ -77,6 +77,12 @@ func pythonCommand(python, script, raw string) (*exec.Cmd, error) {
 	return exec.Command(python, append([]string{script}, args...)...), nil
 }
 
+func scheduledCommand(command string) *exec.Cmd { return exec.Command("/bin/sh", "-c", command) }
+
+func quoteScheduledPath(path string) string {
+	return "'" + strings.ReplaceAll(path, "'", "'\"'\"'") + "'"
+}
+
 func start(cmd *exec.Cmd) error {
 	if err := cmd.Start(); err != nil {
 		return err

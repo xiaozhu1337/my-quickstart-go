@@ -97,7 +97,7 @@ func TestIconPreparationWaitsAndHasDeadline(t *testing.T) {
 }
 
 func TestHiddenReturnDeadline(t *testing.T) {
-	for _, page := range []string{"launcher", "library", "settings", "library-settings"} {
+	for _, page := range []string{"launcher", "library", "settings", "library-settings", "schedule"} {
 		for _, seconds := range []float64{3, 10} {
 			t.Run(fmt.Sprintf("%s/%g", page, seconds), func(t *testing.T) {
 				synctest.Test(t, func(t *testing.T) {
@@ -106,6 +106,9 @@ func TestHiddenReturnDeadline(t *testing.T) {
 					a.mainTab = 0
 					if page == "library" || page == "library-settings" {
 						a.mainTab = 1
+					}
+					if page == "schedule" {
+						a.mainTab = 2
 					}
 					a.settingsOpen = page == "settings" || page == "library-settings"
 					callbacks := make(chan func(), 2)
@@ -247,5 +250,55 @@ func TestHiddenReturnSetting(t *testing.T) {
 				t.Fatalf("setting did not persist: %v", err)
 			}
 		}
+	}
+}
+
+func TestHiddenReturnResetsScheduledDialogs(t *testing.T) {
+	for _, action := range []string{"Add task", "Edit", "Delete"} {
+		t.Run(action, func(t *testing.T) {
+			a := fixture()
+			a.mainTab = 2
+			saved := model.ScheduledTask{ID: "saved", Name: "Saved task", Command: "backup.exe --daily", Time: "09:00", Enabled: true}
+			a.state.Tasks = []model.ScheduledTask{saved}
+			tt := ui.NewTester(a.view, 960, 620)
+			if err := tt.Click(action); err != nil {
+				t.Fatal(err)
+			}
+			if !a.schedule.ModalOpen() {
+				t.Fatal("scheduled dialog did not open")
+			}
+			if action == "Add task" {
+				if err := tt.Click("Task name"); err != nil {
+					t.Fatal(err)
+				}
+				tt.Type("Unsaved draft")
+			}
+			a.hiddenReturnDeadline = time.Now().Add(time.Second)
+			a.Show()
+			if a.mainTab != 2 || !a.schedule.ModalOpen() {
+				t.Fatal("early reopen must retain the dialog")
+			}
+			a.hiddenReturnDeadline = time.Now().Add(-time.Second)
+			a.Show()
+			if a.mainTab != 0 || a.schedule.ModalOpen() {
+				t.Fatal("elapsed hide must return to launcher and close scheduled dialogs")
+			}
+			tt.Frame()
+			if !tt.HasText("Alpha App") || tt.HasText("New scheduled task") || tt.HasText("Delete scheduled task") {
+				t.Fatal("scheduled modal remained visible over launcher")
+			}
+			if err := tt.Click("Scheduled tasks"); err != nil {
+				t.Fatal(err)
+			}
+			if a.schedule.ModalOpen() || !tt.HasText("Saved task") || len(a.state.Tasks) != 1 || a.state.Tasks[0] != saved {
+				t.Fatal("returning to schedules must show the saved list without stale dialogs")
+			}
+			if err := tt.Click("Add task"); err != nil {
+				t.Fatal(err)
+			}
+			if tt.HasText("Unsaved draft") {
+				t.Fatal("discarded draft returned in the next editor")
+			}
+		})
 	}
 }

@@ -13,8 +13,10 @@ type ScheduledTask struct {
 	ID   string `json:"id" yaml:"id"`
 	Name string `json:"name" yaml:"name"`
 	Time string `json:"time" yaml:"time"`
-	Path string `json:"path" yaml:"path"`
-	Args string `json:"args,omitempty" yaml:"args,omitempty"`
+	// Command is a complete shell command. Legacy fields remain readable for old tasks.
+	Command string `json:"command,omitempty" yaml:"command,omitempty"`
+	Path    string `json:"path" yaml:"path"`
+	Args    string `json:"args,omitempty" yaml:"args,omitempty"`
 	// PythonPath selects an interpreter for .py/.pyw scripts; empty uses PATH.
 	PythonPath        string `json:"pythonPath,omitempty" yaml:"pythonPath,omitempty"`
 	Enabled           bool   `json:"enabled" yaml:"enabled"`
@@ -33,11 +35,11 @@ func ParseDailyTime(value string) (time.Time, error) {
 }
 
 func (t ScheduledTask) Validate() error {
-	if strings.TrimSpace(t.ID) == "" || strings.TrimSpace(t.Name) == "" || strings.TrimSpace(t.Path) == "" {
-		return errors.New("task ID, name and program path are required")
+	if strings.TrimSpace(t.ID) == "" || strings.TrimSpace(t.Name) == "" || (strings.TrimSpace(t.Command) == "" && strings.TrimSpace(t.Path) == "") {
+		return errors.New("task ID, name and command are required")
 	}
-	if strings.ContainsAny(t.Path+t.Args+t.PythonPath, "\x00\r\n") {
-		return errors.New("program path, Python interpreter and arguments must be single lines without NUL")
+	if strings.ContainsAny(t.Command+t.Path+t.Args+t.PythonPath, "\x00\r\n") {
+		return errors.New("command, program path, Python interpreter and arguments must be single lines without NUL")
 	}
 	if _, err := ParseDailyTime(t.Time); err != nil {
 		return err

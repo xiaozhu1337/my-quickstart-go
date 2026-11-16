@@ -12,13 +12,46 @@ import (
 	"my-quickstart-go/internal/model"
 )
 
-// LaunchScheduledTask preserves the task's interpreter selection for Python scripts.
+// LaunchScheduledTask accepts complete commands and preserves legacy launch behavior.
 func LaunchScheduledTask(task model.ScheduledTask) error {
+	if task.Command != "" {
+		command := strings.TrimSpace(task.Command)
+		if command == "" || strings.ContainsAny(command, "\x00\r\n") {
+			return errors.New("command must be a nonempty single line without NUL")
+		}
+		cmd := scheduledCommand(command)
+		cmd.Dir = BaseDir()
+		return startScheduled(cmd, "scheduled command "+task.Name)
+	}
 	entry := model.Entry{Name: task.Name, Path: task.Path, Args: task.Args}
 	if task.IsPython() {
 		return launchPython(entry, task.PythonPath)
 	}
 	return LaunchScheduled(entry)
+}
+
+// ScheduledCommand combines old task fields for display without changing saved tasks.
+func ScheduledCommand(task model.ScheduledTask) string {
+	if task.Command != "" {
+		return task.Command
+	}
+	if strings.TrimSpace(task.Path) == "" {
+		return ""
+	}
+	command := quoteScheduledPath(absolutePath(task.Path))
+	if task.IsPython() {
+		python := cleanInput(task.PythonPath)
+		if python == "" {
+			python = "python"
+		} else if strings.ContainsAny(python, `/\:`) {
+			python = absolutePath(python)
+		}
+		command = quoteScheduledPath(python) + " " + command
+	}
+	if task.Args != "" {
+		command += " " + task.Args
+	}
+	return command
 }
 
 func pythonInterpreter(value string) (string, error) {
@@ -29,7 +62,7 @@ func pythonInterpreter(value string) (string, error) {
 				return filepath.Abs(path)
 			}
 		}
-		return "", errors.New("Python was not found on PATH; select a Python interpreter in the task")
+		return "", errors.New("Python was not found on PATH; specify the Python interpreter in the task command")
 	}
 	if !strings.ContainsAny(value, `/\:`) {
 		path, err := exec.LookPath(value)
@@ -74,23 +107,27 @@ func launchPython(entry model.Entry, interpreter string) error {
 	if err != nil {
 		return err
 	}
+	return startScheduled(cmd, "scheduled Python script "+script)
+}
+
+func startScheduled(cmd *exec.Cmd, label string) error {
 	// Keep only a bounded stderr tail; the application's logger rotates its files.
-	stderr := &pythonStderr{}
+	stderr := &scheduledStderr{}
 	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start Python script: %w", err)
+		return fmt.Errorf("%s: %w", label, err)
 	}
 	go func() {
 		if err := cmd.Wait(); err != nil {
-			log.Printf("scheduled Python script %q: %v\n%s", script, err, strings.TrimSpace(string(stderr.data)))
+			log.Printf("%s: %v\n%s", label, err, strings.TrimSpace(string(stderr.data)))
 		}
 	}()
 	return nil
 }
 
-type pythonStderr struct{ data []byte }
+type scheduledStderr struct{ data []byte }
 
-func (w *pythonStderr) Write(data []byte) (int, error) {
+func (w *scheduledStderr) Write(data []byte) (int, error) {
 	const limit = 8 * 1024
 	n := len(data)
 	if n >= limit {

@@ -141,13 +141,13 @@ func TestScheduledPythonMissingInterpreter(t *testing.T) {
 		}
 	}
 	t.Setenv("PATH", dir)
-	if err := LaunchScheduledTask(model.ScheduledTask{Path: script}); err == nil || !strings.Contains(err.Error(), "select a Python interpreter") {
+	if err := LaunchScheduledTask(model.ScheduledTask{Path: script}); err == nil || !strings.Contains(err.Error(), "specify the Python interpreter") {
 		t.Fatal("missing PATH interpreter must explain how to fix the task", err)
 	}
 }
 
 func TestPythonErrorCaptureIsBounded(t *testing.T) {
-	w := &pythonStderr{}
+	w := &scheduledStderr{}
 	for _, value := range []string{strings.Repeat("x", 12000), "\nTraceback: example", strings.Repeat("y", 6000), "\nValueError: last line"} {
 		if n, err := w.Write([]byte(value)); err != nil || n != len(value) || len(w.data) > 8192 {
 			t.Fatal("stderr must be consumed completely and bounded", n, err, len(w.data))

@@ -129,9 +129,9 @@ func TestScheduledTabAndSettingsNavigation(t *testing.T) {
 			yesterday := time.Now().AddDate(0, 0, -1)
 			lastRun := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 18, 0, 0, 0, time.Local)
 			a.state.Tasks = []model.ScheduledTask{
-				{ID: "backup", Name: "每日备份", Time: "21:30", Path: `C:\Tools\backup.exe`, Args: `--daily`, Enabled: true},
-				{ID: "report", Name: "生成日报", Time: "18:00", Path: `C:\Tools\report.cmd`, Enabled: true, LastScheduledDate: lastRun.Format(time.DateOnly), LastRunAt: lastRun.UnixMilli(), LastStatus: "started"},
-				{ID: "disabled", Name: "清理临时目录", Time: "09:00", Path: `C:\Tools\cleanup.exe`},
+				{ID: "backup", Name: "每日备份", Time: "21:30", Command: `python "C:\scripts\每日备份.py" --daily`, Enabled: true},
+				{ID: "report", Name: "生成日报", Time: "18:00", Command: `"C:\Tools\report.cmd"`, Enabled: true, LastScheduledDate: lastRun.Format(time.DateOnly), LastRunAt: lastRun.UnixMilli(), LastStatus: "started"},
+				{ID: "disabled", Name: "清理临时目录", Time: "09:00", Command: `"C:\Tools\cleanup.exe"`},
 			}
 			tt := ui.NewTester(a.view, size.w, size.h)
 			for _, label := range []string{a.text("定时任务", "Scheduled tasks"), a.text("设置", "Settings")} {
