@@ -16,6 +16,7 @@ import (
 
 type Panel struct {
 	probeState
+	Dispatch                                  func(func())
 	Window                                    *mygo.Window
 	Language                                  string
 	Busy                                      bool
@@ -26,6 +27,7 @@ type Panel struct {
 	message, failure                          string
 	list                                      ui.ListState
 	editOpen, skillOpen, removeOpen           bool
+	compactDeployment                         bool
 	resetMCP                                  bool
 	openFolder                                func(string) error
 	editID, name, description, config, source string
@@ -89,16 +91,22 @@ func (p *Panel) run(job func() (string, error), closeDialog bool) {
 				p.editOpen, p.skillOpen, p.removeOpen = false, false, false
 			}
 		}
-		if p.Window != nil {
-			p.Window.Update(finish)
-		} else {
-			finish()
-		}
+		p.complete(finish)
 	}
-	if p.Window != nil {
+	if p.Dispatch != nil || p.Window != nil {
 		go work()
 	} else {
 		work()
+	}
+}
+
+func (p *Panel) complete(fn func()) {
+	if p.Dispatch != nil {
+		p.Dispatch(fn)
+	} else if p.Window != nil {
+		p.Window.Update(fn)
+	} else {
+		fn()
 	}
 }
 

@@ -9,6 +9,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/nsgo-dev/nsgo/core"
+
 	"my-quickstart-go/internal/branding"
 	"my-quickstart-go/internal/libraryui"
 	"my-quickstart-go/internal/model"
@@ -16,7 +18,17 @@ import (
 	"my-quickstart-go/internal/scheduleui"
 )
 
+type nativeWindow struct {
+	root, surface *core.Scope
+	window        *core.Window
+	tray          *core.Tray
+	refresh       func()
+	hotkey        *core.Signal[string]
+	icons         map[string]*core.Signal[[]byte]
+}
+
 type App struct {
+	native           *nativeWindow
 	mainTab          int
 	library          *libraryui.Panel
 	schedule         *scheduleui.Panel
@@ -74,6 +86,140 @@ type App struct {
 
 func (a *App) SetLibrary(root string) { a.library = libraryui.New(root) }
 
+func (a *App) Mount(cx *core.Scope) {
+	rev := core.NewSignal(cx, 0)
+	n := &nativeWindow{root: cx, hotkey: core.NewSignalFunc(cx, a.state.Settings.ToggleHotkey, nil), icons: make(map[string]*core.Signal[[]byte])}
+	a.native = n
+	n.refresh = func() { rev.Update(func(i int) int { return i + 1 }) }
+	opts := core.WindowOptions{Title: "My Quickstart Go", Width: 960, Height: 620, Hidden: true, Constraints: core.WindowConstraints{MinWidth: 560, MinHeight: 380}}
+	if b := a.state.Settings.WindowBounds; a.state.Settings.RememberWindowBounds && b != nil && b.Width >= 560 && b.Height >= 380 {
+		for _, display := range cx.Env().Displays() {
+			f := display.VisibleFrame
+			if b.X+b.Width > int(f.Origin.X) && b.Y+b.Height > int(f.Origin.Y) && b.X < int(f.Origin.X+f.Size.Width) && b.Y < int(f.Origin.Y+f.Size.Height) {
+				opts.Frame = core.WindowFrame{Move: true, X: core.Points(b.X), Y: core.Points(b.Y), Width: core.Points(b.Width), Height: core.Points(b.Height)}
+				break
+			}
+		}
+	}
+	n.window = cx.OpenWindow(opts, func(surface *core.Scope) core.Node {
+		n.surface = surface
+		a.nativeAppearance()
+		surface.Effect(func() { a.captureNativeBounds() })
+		return core.Dynamic(func(page *core.Scope) core.Node { rev.Get(); return a.nativePage(page) })
+	})
+	cx.SetMainWindow(n.window)
+	cx.OnReopen(a.Show)
+	n.window.OnClosing(cx, func(e *core.WindowClosing) { e.Cancel(); a.hide() })
+	canQuit := func() bool {
+		if a.schedule.Busy() || (a.library != nil && a.library.Busy) {
+			a.report(errors.New(a.text("操作进行中，请稍后退出", "Operation in progress; please wait before quitting")))
+			a.Show()
+			return false
+		}
+		a.captureNativeBounds()
+		if a.Flush() != nil {
+			return false
+		}
+		a.quitting = true
+		a.schedule.Stop()
+		return true
+	}
+	cx.OnQuitRequest(func(q *core.QuitRequest) {
+		if !canQuit() {
+			q.Cancel()
+		}
+	})
+	n.tray = cx.NewTray(core.TrayOptions{Icon: branding.PNG, Tooltip: "My Quickstart Go", OnClick: a.Show, Menu: func() []core.MenuItem {
+		return []core.MenuItem{
+			{Label: a.text("显示 / 隐藏", "Show / Hide"), OnSelect: a.Toggle}, {Label: a.text("设置", "Settings"), OnSelect: func() { a.openSettings(); a.Show() }},
+			{Separator: true}, {Label: a.text("退出", "Quit"), OnSelect: func() {
+				if canQuit() {
+					cx.Quit()
+				}
+			}}}
+	}})
+	cx.Effect(func() {
+		key := strings.TrimSpace(n.hotkey.Get())
+		a.registeredHotkey = ""
+		if key == "" {
+			if a.state.Settings.ToggleHotkey != "" {
+				a.state.Settings.ToggleHotkey = ""
+				a.changed()
+			}
+			return
+		}
+		h := cx.RegisterHotKey(strings.ToLower(key), a.Toggle)
+		cx.Effect(func() {
+			switch h.State() {
+			case core.HotKeyRegistered:
+				a.registeredHotkey = key
+				if a.state.Settings.ToggleHotkey != key {
+					a.state.Settings.ToggleHotkey = key
+					a.changed()
+				}
+			case core.HotKeyTaken, core.HotKeyUnsupported:
+				a.report(fmt.Errorf("%s: %s", a.text("快捷键不可用", "Shortcut unavailable"), key))
+				// Restore the last accepted binding if the replacement was rejected.
+				if saved := a.state.Settings.ToggleHotkey; saved != "" && !strings.EqualFold(saved, key) {
+					cx.Post(func() {
+						if n.hotkey.GetUntracked() == key {
+							n.hotkey.Set(saved)
+						}
+					})
+				}
+				n.refresh()
+			}
+		})
+	})
+	if a.library != nil {
+		a.library.Dispatch = a.post
+	}
+	a.schedule.StartWithDispatch(cx.Post)
+	if a.saver != nil {
+		go func() {
+			for {
+				select {
+				case err := <-a.saver.errors:
+					a.post(func() { a.report(err) })
+				case <-a.saver.stop:
+					return
+				}
+			}
+		}()
+	}
+	if !a.state.Settings.HideOnStartup || n.tray == nil {
+		a.Show()
+	}
+}
+
+func (a *App) post(fn func()) {
+	if n := a.native; n != nil {
+		n.root.Post(func() { fn(); n.refresh() })
+		return
+	}
+	a.window.Update(fn)
+}
+
+func (a *App) captureNativeBounds() {
+	n := a.native
+	if n == nil || n.surface == nil {
+		return
+	}
+	env := n.surface.Env()
+	f := env.WindowFrame()
+	if env.Minimized() || env.Maximized() || !a.state.Settings.RememberWindowBounds || f.Width < 560 || f.Height < 380 {
+		return
+	}
+	b := model.Bounds{X: int(f.X), Y: int(f.Y), Width: int(f.Width), Height: int(f.Height)}
+	if old := a.state.Settings.WindowBounds; old != nil && *old == b {
+		return
+	}
+	a.state.Settings.WindowBounds = &b
+	if a.saver != nil {
+		a.saver.set(a.state)
+	}
+}
+
 func New(state model.State, p persistence) *App {
 	state.Normalize()
 	a := &App{state: state, selected: 0, sidebar: float32(state.Settings.SidebarWidth),
@@ -91,73 +237,17 @@ func New(state model.State, p persistence) *App {
 	return a
 }
 
-func (a *App) Ready() {
-	a.warming = true
-	syncNativeTheme(a.state.Settings.Theme)
-	if err := mygo.App.Dock.SetIcon(branding.PNG); err != nil {
-		a.report(fmt.Errorf("%s: %w", a.text("无法设置应用图标", "Cannot set application icon"), err))
-	}
-	opts := mygo.WindowOptions{Title: "My Quickstart Go", Width: 960, Height: 620, MinWidth: 560, MinHeight: 380,
-		Hidden: true, AlwaysOnTop: a.state.Settings.AlwaysOnTop, BackgroundColor: backgroundColor(a.state.Settings.Theme), Content: ui.View(a.view)}
-	if b := a.state.Settings.WindowBounds; a.state.Settings.RememberWindowBounds && b != nil && b.Width >= 560 && b.Height >= 380 {
-		r := mygo.Rectangle{X: b.X, Y: b.Y, Width: b.Width, Height: b.Height}
-		for _, d := range mygo.Screen.Displays() {
-			w := d.WorkArea
-			if r.X+r.Width > w.X && r.Y+r.Height > w.Y && r.X < w.X+w.Width && r.Y < w.Y+w.Height {
-				opts.X, opts.Y, opts.Width, opts.Height = r.X, r.Y, r.Width, r.Height
-				break
-			}
-		}
-	}
-	a.window = mygo.NewWindow(opts)
-	if a.library != nil {
-		a.library.Window = a.window
-	}
-	if err := a.window.SetIcon(branding.PNG); err != nil {
-		a.report(fmt.Errorf("%s: %w", a.text("无法设置窗口图标", "Cannot set window icon"), err))
-	}
-	a.window.OnClose(a.onClose)
-	a.window.OnHide(func() { a.startHiddenReturn(a.window.Update) })
-	a.window.OnShow(a.cancelHiddenReturn)
-	a.window.OnResize(a.captureBounds)
-	a.window.OnMove(a.captureBounds)
-	a.schedule.Start(a.window)
-	mygo.App.SetLanguages(a.state.Settings.Language)
-	if err := a.applyHotkey(a.state.Settings.ToggleHotkey); err != nil {
-		a.report(err)
-	}
-	var err error
-	a.tray, err = mygo.NewTray(mygo.TrayOptions{Icon: branding.PNG, ToolTip: "My Quickstart Go"})
-	if err != nil {
-		a.report(err)
-	} else {
-		a.rebuildTray()
-		a.tray.OnClick(a.Show)
-	}
-	if a.saver != nil {
-		go func() {
-			for {
-				select {
-				case err := <-a.saver.errors:
-					a.window.Update(func() { a.report(err) })
-				case <-a.saver.stop:
-					return
-				}
-			}
-		}()
-	}
-	go func() { fonts := platform.Fonts(); a.window.Update(func() { a.fonts = fonts }) }()
-	if !a.state.Settings.HideOnStartup || a.tray == nil {
-		a.Show()
-	}
-	a.prepareStartup()
-}
-
 func (a *App) Show() {
 	// Apply an elapsed deadline before preparing the first visible frame, even
 	// when the timer callback is still queued on the UI thread.
 	a.finishHiddenReturn(a.hiddenReturnGeneration, time.Now())
 	a.cancelHiddenReturn()
+	if n := a.native; n != nil {
+		n.window.Show()
+		n.window.Focus()
+		n.refresh()
+		return
+	}
 	if a.warming {
 		a.showPending = true
 		return
@@ -175,6 +265,14 @@ func (a *App) Show() {
 	}
 }
 func (a *App) Toggle() {
+	if n := a.native; n != nil {
+		if n.window.Visible() && (n.surface == nil || !n.surface.Env().Minimized()) {
+			a.hide()
+		} else {
+			a.Show()
+		}
+		return
+	}
 	if a.warming {
 		a.showPending = !a.showPending
 		return
@@ -190,7 +288,9 @@ func (a *App) Toggle() {
 		a.Show()
 	}
 }
-func (a *App) canHide() bool { return a.tray != nil || a.registeredHotkey != "" }
+func (a *App) canHide() bool {
+	return a.tray != nil || a.native != nil && a.native.tray != nil || a.registeredHotkey != ""
+}
 
 func (a *App) hide() {
 	if !a.canHide() {
@@ -199,6 +299,12 @@ func (a *App) hide() {
 	}
 	if a.warming {
 		a.showPending = false
+		return
+	}
+	if n := a.native; n != nil {
+		a.captureNativeBounds()
+		n.window.Hide()
+		a.startHiddenReturn(a.post)
 		return
 	}
 	a.captureBounds()
@@ -221,34 +327,6 @@ func (a *App) captureBounds() {
 	}
 	a.state.Settings.WindowBounds = &b
 	a.changed()
-}
-
-func (a *App) onClose(e *mygo.CloseEvent) {
-	if !a.quitting {
-		e.PreventDefault()
-		a.hide()
-	}
-}
-
-func (a *App) BeforeQuit(e *mygo.QuitEvent) {
-	if a.schedule.Busy() {
-		e.PreventDefault()
-		a.report(errors.New(a.text("定时任务正在启动，请稍后再退出", "A scheduled task is starting; please wait before quitting")))
-		return
-	}
-	if a.library != nil && a.library.Busy {
-		e.PreventDefault()
-		a.report(errors.New(a.text("资源库正在保存，请完成后再退出", "Library operation in progress; please wait before quitting")))
-		return
-	}
-	a.captureBounds()
-	if a.Flush() != nil {
-		e.PreventDefault()
-		return
-	}
-	a.quitting = true
-	a.schedule.Stop()
-	a.cancelHiddenReturn()
 }
 
 func (a *App) Flush() error {
@@ -284,6 +362,9 @@ func (a *App) changed() {
 	if a.saver != nil {
 		a.saver.set(a.state)
 	}
+	if a.native != nil {
+		a.native.refresh()
+	}
 }
 func (a *App) deferAction(fn func()) { a.pending = append(a.pending, fn) }
 func (a *App) report(err error) {
@@ -300,35 +381,6 @@ func (a *App) text(zh, en string) string {
 	return zh
 }
 
-func (a *App) applyHotkey(hotkey string) error {
-	hotkey = strings.TrimSpace(hotkey)
-	old := a.registeredHotkey
-	if strings.EqualFold(hotkey, old) {
-		return nil
-	}
-	if hotkey != "" {
-		if err := mygo.GlobalShortcut.Register(hotkey, a.Toggle); err != nil {
-			return fmt.Errorf("%s: %w", a.text("快捷键不可用", "Hotkey unavailable"), err)
-		}
-	}
-	if old != "" {
-		mygo.GlobalShortcut.Unregister(old)
-	}
-	a.registeredHotkey = hotkey
-	return nil
-}
-
-func (a *App) rebuildTray() {
-	if a.tray == nil {
-		return
-	}
-	a.tray.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
-		{Label: a.text("显示 / 隐藏", "Show / Hide"), Click: func(*mygo.MenuItem, *mygo.Window) { a.Toggle() }},
-		{Label: a.text("设置", "Settings"), Click: func(*mygo.MenuItem, *mygo.Window) { a.Show(); a.openSettings(); a.window.Invalidate() }},
-		mygo.Separator(), {Label: a.text("退出", "Quit"), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
-	}))
-}
-
 func (a *App) launch(e model.Entry) {
 	if a.busy {
 		return
@@ -336,7 +388,7 @@ func (a *App) launch(e model.Entry) {
 	a.busy = true
 	go func() {
 		err := platform.Launch(e)
-		a.window.Update(func() {
+		a.post(func() {
 			a.busy = false
 			if err != nil {
 				a.report(err)

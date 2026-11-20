@@ -1,9 +1,6 @@
 package launcher
 
 import (
-	"fmt"
-
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -45,19 +42,4 @@ func palette(id string) *ui.Theme {
 	t.Selection, t.Focus = t.Accent.Alpha(0.25), t.Accent.Alpha(0.7)
 	t.Radius, t.Spacing = 9, 4
 	return t
-}
-
-func backgroundColor(id string) string {
-	c := palette(id).Background
-	return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
-}
-
-func syncNativeTheme(id string) {
-	source := mygo.ThemeLight
-	if palette(id).Dark {
-		source = mygo.ThemeDark
-	}
-	if mygo.Theme.Source() != source {
-		mygo.Theme.SetSource(source)
-	}
 }

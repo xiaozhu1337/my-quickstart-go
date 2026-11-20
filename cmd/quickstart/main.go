@@ -7,7 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/egoist/mygo"
+	"github.com/nsgo-dev/nsgo"
+	"github.com/nsgo-dev/nsgo/core"
 	"my-quickstart-go/internal/launcher"
 	"my-quickstart-go/internal/logging"
 	"my-quickstart-go/internal/model"
@@ -17,67 +18,54 @@ import (
 func main() {
 	data := flag.String("data", "", "Path to launcher database")
 	flag.Parse()
+	var closeApp func()
+	nsgo.Run(func(cx *core.Scope) {
+		var err error
+		closeApp, err = start(cx, *data)
+		if err != nil {
+			log.Print(err)
+			cx.OpenWindow(core.WindowOptions{Title: "My Quickstart Go", Width: 560, Height: 200}, func(*core.Scope) core.Node {
+				return core.Text{Content: err.Error(), Style: core.Style{Padding: core.All(20)}}
+			})
+		}
+	}, nsgo.InstanceKey("my-quickstart-go"))
+	if closeApp != nil {
+		closeApp()
+	}
+}
+
+func start(cx *core.Scope, path string) (func(), error) {
 	exe, err := os.Executable()
 	if err != nil {
-		startupError(err)
-		return
+		return nil, err
 	}
 	logs, err := logging.Open(filepath.Dir(exe))
 	if err != nil {
-		startupError(err)
-		return
+		return nil, err
 	}
-	defer logs.Close()
 	log.SetOutput(logs)
 	log.SetFlags(0)
-	mygo.App.SetName("My Quickstart Go")
-	if languages := mygo.App.PreferredLanguages(); len(languages) > 0 && strings.HasPrefix(strings.ToLower(languages[0]), "zh") {
+	if strings.HasPrefix(strings.ToLower(cx.Env().Locale()), "zh") {
 		model.DefaultLanguage = "zh-CN"
 	}
-	if !mygo.App.RequestSingleInstanceLock() {
-		return
-	}
-	path := *data
+	closeLogs := func() { logs.Close() }
 	if path == "" {
 		path, err = store.DefaultPath()
 		if err != nil {
-			startupError(err)
-			return
+			return closeLogs, err
 		}
 	}
 	db, err := store.Open(path)
 	if err != nil {
-		startupError(err)
-		return
+		return closeLogs, err
 	}
-	defer db.Close()
 	state, err := db.Load()
 	if err != nil {
-		startupError(err)
-		return
+		db.Close()
+		return closeLogs, err
 	}
 	app := launcher.New(state, db)
 	app.SetLibrary(filepath.Join(filepath.Dir(db.Path()), "library"))
-	defer app.Close()
-	mygo.App.OnWindowAllClosed(func() {})
-	mygo.App.OnSecondInstance(func([]string, string) { app.Show() })
-	mygo.App.WhenReady(app.Ready)
-	mygo.App.OnBeforeQuit(app.BeforeQuit)
-	if err := mygo.App.Run(); err != nil {
-		log.Print(err)
-	}
-}
-
-func startupError(err error) {
-	log.Print(err)
-	mygo.App.WhenReady(func() {
-		_, dialogErr := mygo.Dialog.Message(mygo.MessageOptions{Type: mygo.MessageError, Title: "My Quickstart Go", Message: "Unable to start launcher", Detail: err.Error()})
-		if dialogErr != nil {
-			log.Print(dialogErr)
-		}
-		mygo.App.Quit()
-	})
-	if runErr := mygo.App.Run(); runErr != nil {
-		log.Print(runErr)
-	}
+	app.Mount(cx)
+	return func() { app.Close(); db.Close(); logs.Close() }, nil
 }

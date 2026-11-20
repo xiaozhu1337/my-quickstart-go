@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo"
+
 	"my-quickstart-go/internal/model"
 )
 
@@ -110,4 +111,32 @@ func TestSaverSnapshotsAndRetries(t *testing.T) {
 	if p.state.Groups[0].Apps[0].Name != "Modified" || p.writes != 2 {
 		t.Fatal("latest state was not saved")
 	}
+}
+
+func (a *App) onClose(e *mygo.CloseEvent) {
+	if !a.quitting {
+		e.PreventDefault()
+		a.hide()
+	}
+}
+
+func (a *App) BeforeQuit(e *mygo.QuitEvent) {
+	if a.schedule.Busy() {
+		e.PreventDefault()
+		a.report(errors.New(a.text("定时任务正在启动，请稍后再退出", "A scheduled task is starting; please wait before quitting")))
+		return
+	}
+	if a.library != nil && a.library.Busy {
+		e.PreventDefault()
+		a.report(errors.New(a.text("资源库正在保存，请完成后再退出", "Library operation in progress; please wait before quitting")))
+		return
+	}
+	a.captureBounds()
+	if a.Flush() != nil {
+		e.PreventDefault()
+		return
+	}
+	a.quitting = true
+	a.schedule.Stop()
+	a.cancelHiddenReturn()
 }

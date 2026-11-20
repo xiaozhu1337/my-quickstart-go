@@ -2,16 +2,16 @@
 
 # My Quickstart Go
 
-A native desktop launcher for **Windows, macOS, and Linux**, built in Go with [MyGo](https://github.com/egoist/mygo). Organize applications, files, folders, and commands into groups and launch them with a click. The interface uses native Go UI components, without a browser or WebView.
+A native desktop launcher built in Go with [NSGo](https://github.com/nsgo-dev/nsgo). The build script produces a Windows x64 executable. Organize applications, files, folders, and commands into groups and launch them with a click. The interface uses native Go UI components, without a browser or WebView.
 
-![Main window with sample entries](docs/windows-preview.png)
+![NSGo launcher with sample entries on Windows](docs/nsgo-launcher.png)
 
 ## Features
 
 - **Groups and search:** create, rename, and remove groups; press Ctrl/Cmd+F to search names across all groups. A new query selects the first matching group. The sidebar shows each group's match count and disables groups with no matches; clearing the search restores the previous group.
 - **Launch entries:** open applications, files, folders, URLs, and shell commands. Edit names, paths, arguments, and per-entry environment variables. Add files through the context menu or drag them into the window, and browse installed applications using the system application picker.
-- **Drag to organize:** insert cards before or after another card, with a live preview as neighboring cards make room. Release to save or press Esc to cancel. Drop a card onto a sidebar group to move it to that group. Reordering is available when search is empty.
-- **Five themes:** Graphite, Paper, Midnight, Forest, and Rose. Change the theme immediately from its preview card. Choose English or Simplified Chinese, adjust fonts, and customize card and sidebar dimensions.
+- **Drag to organize:** insert cards before or after another card, with an outline showing the drop target. Release to save. Drop a card onto a sidebar group to move it to that group. Reordering is available when search is empty.
+- **Five themes:** Graphite, Paper, Midnight, Forest, and Rose. Choose a theme in Settings to apply it immediately. Choose English or Simplified Chinese, adjust fonts, and customize card and sidebar dimensions.
 - **Desktop integration:** tray controls, a global show/hide shortcut, always-on-top mode, hidden startup, remembered window bounds, and paths relative to the executable. Windows supports `.lnk` resolution and UWP entries; other platforms use their own application lists and launch mechanisms.
 - **Local persistence:** SQLite storage with transactional saves, legacy data migration, and protection against replacing unreadable data with an empty state.
 - **Scheduled tasks:** run a complete command daily at a chosen time, with enable/disable controls, manual runs, and a searchable paginated list.
@@ -20,11 +20,11 @@ Right-click empty space in the card grid to add entries. Right-click empty space
 
 Under **Settings → Layout → Feature tabs**, turn **Show MCP / Skills** and **Show scheduled tasks** on or off independently. Turning both off leaves only Launcher, removes the entire tab bar, and moves Settings to the bottom of the group sidebar. Turn them back on to restore the tabs. Preferences persist across restarts; older databases show all tabs by default. Hiding a page keeps its data, and enabled scheduled tasks continue running in the background.
 
-Settings groups **Appearance** under General; **Layout, Behavior, and Hotkey** under Launcher; **Resource import** under Resources; and **About** under Information. About shows the application version, Go version, platform, and the dependency versions embedded in the executable. Wide windows use a scrollable sidebar; narrow windows use a category selector. Changes save automatically, except the global hotkey, which needs **Apply** to validate registration. The entry editor adapts to smaller windows while keeping its save button visible.
+Settings has six sections: Appearance, Layout, Behavior, Hotkey, Resource import, and About. About shows the application version, Go version, platform, and the dependency versions embedded in the executable. Use the section buttons to switch pages. Layout changes save automatically. Use **Apply shortcut** to register a global hotkey, or **Apply font** to save a custom font name.
 
-![Settings](docs/settings-preview.png)
+![NSGo layout settings with live card preview](docs/nsgo-settings.png)
 
-More previews: [themes](docs/themes-preview.png), [search](docs/search-preview.png), [entry editor](docs/editor-preview.png), and [drag reordering](docs/drag-preview.png). The previews are rendered with MyGo's headless UI tester and sample data. A detailed feature comparison and validation record is available in [Chinese](docs/FEATURES.md).
+More previews: [themes](docs/themes-preview.png), [search](docs/search-preview.png), [entry editor](docs/editor-preview.png), and [drag reordering](docs/drag-preview.png). These images show the previous MyGo interface with sample data. A detailed feature comparison and validation record is available in [Chinese](docs/FEATURES.md).
 
 ## Scheduled tasks
 
@@ -54,11 +54,11 @@ Use the waveform icon on an MCP row to **Check availability**. The check connect
 
 ![MCP availability check with sample data](docs/mcp-check-preview.png)
 
-MCP and Skill rows have an **Edit** button. For a Skill, the editor prefills its current directory. Enter or browse to a directory containing `SKILL.md`, then choose **Update and save** to change only the directory reference and refresh the description while preserving its name and pin state. Files in both directories remain unchanged. Invalid sources or failed saves preserve the previous reference; a missing source can be replaced with a new reference. **Open folder** opens the referenced directory in Windows Explorer for manual editing. Copy the resource to each project again to update its independent files. The list's saved name and description are library metadata. MCP configuration comments include concrete `args`, `env`, `cwd`, and HTTP `headers` examples, including on existing entries.
+MCP and Skill rows have an **Edit** button. For a Skill, the editor prefills its current directory. Enter or browse to a directory containing `SKILL.md`, then choose **Save** to change only the directory reference and refresh the description while preserving its name and pin state. Files in both directories remain unchanged. Invalid sources or failed saves preserve the previous reference; a missing source can be replaced with a new reference. **Open folder** opens the referenced directory in Windows Explorer for manual editing. Copy the resource to each project again to update its independent files. The list's saved name and description are library metadata. MCP configuration comments include concrete `args`, `env`, `cwd`, and HTTP `headers` examples, including on existing entries.
 
 Use **Pin** / **Unpin** on either resource type to keep it at the top. Pin state persists across restarts and MCP edits; multiple pinned resources retain their original relative order. Unpinning restores the resource's place among unpinned entries. Row action buttons do not change selection, and hover/selection highlights keep row sizes fixed.
 
-To migrate existing resources, open **Settings → Resources → Resource import → Import MCPs and skills from magpie**. The default source is `~/.config/magpie` (or `$XDG_CONFIG_HOME/magpie`); portable installations can use the install folder or its `data` folder. Import saves standard stdio/HTTP MCP definitions and notes, and references local skill directories directly, including skills whose root directory is a symlink. Existing same-kind names are skipped, and invalid or unsupported entries are reported individually. SSE and servers with disabled-tool/startup-timeout overrides are reported as unsupported. Magpie's own configuration and files are not changed; agent assignments, OAuth sessions, and plugin runtime state are not migrated. Importing does not deploy resources to a project.
+To migrate existing resources, open **Settings → Resource import → Import MCPs and skills from magpie**. The default source is `~/.config/magpie` (or `$XDG_CONFIG_HOME/magpie`); portable installations can use the install folder or its `data` folder. Import saves standard stdio/HTTP MCP definitions and notes, and references local skill directories directly, including skills whose root directory is a symlink. Existing same-kind names are skipped, and invalid or unsupported entries are reported individually. SSE and servers with disabled-tool/startup-timeout overrides are reported as unsupported. Magpie's own configuration and files are not changed; agent assignments, OAuth sessions, and plugin runtime state are not migrated. Importing does not deploy resources to a project.
 
 ![MCP and skill library with sample data](docs/library-preview.png)
 
@@ -89,7 +89,7 @@ Extract the package before running it. Windows packages contain an `.exe`; macOS
 
 ## Build and run
 
-The Go toolchain is managed with [mise](https://mise.jdx.dev/) and pinned to **Go 1.27.3**. The UI uses MyGo **v0.9.1**; dependencies are pinned in `go.mod` and `go.sum`. The build script uses only the Python standard library.
+The Go toolchain is managed with [mise](https://mise.jdx.dev/) and pinned to **Go 1.27.3**. The UI uses NSGo **v0.2.0**. Dependencies are pinned in `go.mod` and `go.sum`. The build script uses only the Python standard library.
 
 ```sh
 mise install go@1.27.3
@@ -102,7 +102,7 @@ Build Windows x64 (the only target produced by the build script):
 python -X utf8 "scripts/build.py"
 ```
 
-The script always builds `windows-amd64` and overwrites `bin/windows-amd64/my-quickstart-go.exe`. The existing `--os windows --arch amd64` arguments remain accepted; other targets are rejected. Keep only `windows-amd64` under `bin`; build outputs are ignored by Git. Run the resulting `.exe` on Windows. The build uses `CGO_ENABLED=0`, while MyGo loads native system libraries at runtime.
+The script always builds `windows-amd64` and overwrites `bin/windows-amd64/my-quickstart-go.exe`. The existing `--os windows --arch amd64` arguments remain accepted; other targets are rejected. Keep only `windows-amd64` under `bin`; build outputs are ignored by Git. Run the resulting `.exe` on Windows. The Windows build uses `CGO_ENABLED=0`.
 
 Linux requires GTK 3. Tray support also requires `libayatana-appindicator3` and desktop support; Wayland global shortcuts depend on the desktop's GlobalShortcuts portal. Window positioning and always-on-top behavior can also be constrained by Wayland. macOS builds are not signed or notarized.
 
@@ -119,7 +119,7 @@ The global hotkey is empty by default. Set a shortcut such as `Ctrl+Alt+Space` i
 
 Hidden startup controls the launcher's initial visibility. To start it at login on Windows, create or update a shortcut in your Windows Startup folder.
 
-Startup preloads the initial screen's icons (up to 128 cards, with a 500 ms wait limit) and prepares content before revealing the window. On Windows, the hidden native surface also draws its first GPU frame without showing or activating the window; shell icons are extracted on background COM threads. Later reveals prepare the current frame before showing it. macOS/Linux warm content layout and text; their desktop backends still initialize GPU presentation when the window is mapped. Very slow or unavailable targets retain their placeholder while icon loading continues.
+NSGo creates cards for the visible part of the grid. Icons load in the background and replace the letter placeholders when available.
 
 ## Data and legacy migration
 
@@ -141,15 +141,15 @@ Entries and settings remain in local SQLite, including environment variable valu
 
 ## Testing
 
-UI tests use [MyGo `ui.NewTester`](https://mygo.egoist.dev/docs/ui/testing) to simulate input, clicks, dragging, scrolling, keyboard navigation, and layout **without opening a window**. Drag tests cover 100% and 200% scale.
+NSGo headless tests exercise command creation, MCP saving and pinning, task creation, settings navigation, and recovery after a rejected global hotkey. Legacy UI tests use [MyGo `ui.NewTester`](https://mygo.egoist.dev/docs/ui/testing) to simulate input, clicks, dragging, scrolling, keyboard navigation, and layout **without opening a window**. Drag tests cover 100% and 200% scale.
 
 ```sh
-mise exec go@1.27.3 -- go test ./...
+mise exec go@1.27.3 python@3.15.2 -- go test ./...
 mise exec go@1.27.3 -- go test -race ./...
 mise exec go@1.27.3 -- go vet ./...
 ```
 
-Windows tests, race checks, and static checks pass. Headless UI and backend tests have also run on Linux through WSL. All six Windows/macOS/Linux architecture combinations build successfully; Windows icon resources and macOS bundle metadata have been checked. Real macOS and Linux desktop interactions remain unverified; see the [validation record](docs/FEATURES.md) for details.
+The NSGo migration was tested on Windows x64 with the full Go test suite, static checks, and desktop navigation in the built executable. Older cross-platform results and screenshots are recorded in the [validation history](docs/FEATURES.md).
 
 ## Project layout
 

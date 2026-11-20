@@ -2,27 +2,27 @@
 
 # My Quickstart Go
 
-使用 [MyGo](https://github.com/egoist/mygo) 原生 Go 组件重构的桌面快速启动器，支持 Windows、macOS 和 Linux。界面采用按快捷键展开的搜索栏、分类侧栏、卡片网格和原生弹层；不依赖 Tauri、浏览器或 WebView。
+使用 Go 和 [NSGo](https://github.com/nsgo-dev/nsgo) 构建的桌面快速启动器。默认界面提供分类侧栏、卡片网格和快捷搜索。构建脚本生成 Windows x64 可执行文件。
 
-![主界面（示例数据）](docs/windows-preview.png)
+![Windows 上的 NSGo 启动器主界面（示例数据）](docs/nsgo-launcher.png)
 
 支持分类增删改、跨分类名称搜索、应用/文件/目录启动、命令、参数和逐项环境变量、系统应用选择、文件拖入、卡片排序和跨分类移动。保留中英文、字体、卡片与侧栏尺寸、窗口置顶、启动时隐藏、相对路径、窗口位置记忆、全局快捷键和托盘。完整对照及平台差异见 [功能与验证记录](docs/FEATURES.md)。
 
-界面提供 **石墨、纸白、午夜、松林、玫瑰** 五种主题，覆盖深浅配色；在设置中点击主题预览即可即时应用并自动保存，系统标题栏同步切换深浅样式。主界面以分类和应用网格组织内容；搜索栏默认收起，Ctrl/Cmd+F 显示并聚焦，Esc 清空并收起。搜索时自动选中首个匹配分类，仅显示当前分类的匹配条目；侧栏显示各分类匹配数量，零匹配分类变灰且不可选，清空搜索恢复之前的分类。提示栏仅在有消息时出现。通过网格空白处的右键菜单添加应用、文件或命令，Windows 的应用选择入口为“添加 UWP 应用”。应用编辑弹窗宽度为 720 DIP，小窗口自动收窄，表单可滚动且保存按钮保持可见。
+界面提供 **石墨、纸白、午夜、松林、玫瑰** 五种主题，覆盖深浅配色；在设置中选择主题即可即时应用并自动保存，系统标题栏同步切换深浅样式。主界面以分类和应用网格组织内容；搜索栏默认收起，Ctrl/Cmd+F 显示并聚焦，Esc 清空并收起。搜索时自动选中首个匹配分类，仅显示当前分类的匹配条目；侧栏显示各分类匹配数量，零匹配分类变灰且不可选，清空搜索恢复之前的分类。提示栏仅在有消息时出现。通过网格空白处的右键菜单添加应用、文件或命令，Windows 的应用选择入口为“添加 UWP 应用”。应用编辑页提供可滚动的表单。
 
-未搜索时，拖动卡片可插入到其他卡片前后，周围卡片实时让位并显示占位；松手后保存顺序，Esc 取消。也可拖到侧栏分类，移入该组首位，见 [拖动预览](docs/drag-preview.png)。
+未搜索时，拖动卡片可插入到其他卡片前后，目标位置会显示边框，松手后保存顺序。也可拖到侧栏分类，移入该组首位，见 [拖动预览](docs/drag-preview.png)。
 
-设置采用独立页面，按 **通用（外观）、应用启动（布局、行为、快捷键）、资源管理（资源导入）、应用信息（关于）** 分类。“关于”显示程序版本、Go 版本、运行平台，以及可执行文件实际包含的依赖库版本。常规窗口使用可滚动的左侧导航，窄窗口改用分类下拉框；尺寸设置提供卡片预览。除全局快捷键需要点击“应用”验证注册结果外，其他设置自动保存。
+设置页提供 **外观、布局、行为、快捷键、资源导入、关于** 六个入口。“关于”显示程序版本、Go 版本、运行平台，以及可执行文件实际包含的依赖库版本。布局页可预览卡片尺寸。布局修改会自动保存，手动输入字体名称或修改全局快捷键后点击对应的应用按钮即可生效。
 
 设置入口位于顶部标签栏最右侧，在应用启动、MCP / Skills 和定时任务页都可打开；返回时保留原来所在页面。在分类侧栏空白处右键选择“添加分类”，分类自身的右键菜单可重命名、移除。窗口、托盘和应用文件统一使用蓝色四格图标：Windows 标题栏与任务栏设置原生图标，exe 内嵌七档尺寸资源，macOS 应用包提供 ICNS 并设置 Dock 图标。Linux 通过 GTK 设置默认及窗口图标，显示位置由桌面环境决定。
 
 在 **设置 → 布局 → 功能标签页** 中，可分别关闭“显示 MCP / Skills”和“显示定时任务”。两项都关闭后只保留应用启动，顶部标签栏整体隐藏，设置入口移到分类侧栏底部；重新打开开关即可恢复标签。设置会自动保存，旧版本数据默认显示所有标签。隐藏页面保留已有资源和任务，已启用的定时任务仍会在后台执行。
 
-![设置界面](docs/settings-preview.png)
+![NSGo 布局设置与卡片实时预览](docs/nsgo-settings.png)
 
 搜索与编辑器预览：[搜索匹配与灰色分类](docs/search-preview.png)、[加宽应用编辑框](docs/editor-preview.png)。
 
-五种主题见 [主题对照图](docs/themes-preview.png)。以上预览使用 MyGo 原生界面测试器与示例数据渲染。
+五种主题见 [主题对照图](docs/themes-preview.png)。主题、搜索、拖动和条目编辑的历史预览使用 MyGo 和示例数据渲染。
 
 ## 定时任务
 
@@ -52,11 +52,11 @@ MCP 保存后可随时编辑名称；再次复制到项目时，会替换这个�
 
 ![MCP 可用性检测（示例数据）](docs/mcp-check-preview.png)
 
-MCP 和 Skill 条目均提供“编辑”按钮。编辑 Skill 时，输入框预填当前目录；填写或选择新的含 `SKILL.md` 的目录后，点击“更新并保存”，只修改目录引用并刷新说明，保留当前名称与置顶状态，不修改新旧目录中的文件。目录无效或保存失败时保留原引用；原目录已丢失时也可重新指定。Skill 的“打开目录”按钮通过 Windows 资源管理器打开当前引用的目录，也可自行编辑 `SKILL.md` 和附带文件。修改后需再次复制到项目，已部署副本不会自动变化。列表中的名称和说明仍使用资源库保存的元数据。MCP 配置注释提供 `args`、`env`、`cwd` 和 HTTP `headers` 的具体示例，编辑已有条目时也会显示。
+MCP 和 Skill 条目均提供“编辑”按钮。编辑 Skill 时，输入框预填当前目录；填写或选择新的含 `SKILL.md` 的目录后，点击“保存”，只修改目录引用并刷新说明，保留当前名称与置顶状态，不修改新旧目录中的文件。目录无效或保存失败时保留原引用；原目录已丢失时也可重新指定。Skill 的“打开目录”按钮通过 Windows 资源管理器打开当前引用的目录，也可自行编辑 `SKILL.md` 和附带文件。修改后需再次复制到项目，已部署副本不会自动变化。列表中的名称和说明仍使用资源库保存的元数据。MCP 配置注释提供 `args`、`env`、`cwd` 和 HTTP `headers` 的具体示例，编辑已有条目时也会显示。
 
 两种资源均支持“置顶 / 取消置顶”。置顶状态自动保存，重启和编辑 MCP 后仍保留；多个置顶条目保持原有相对顺序，取消置顶后恢复到普通条目中的原有顺序。点击行内按钮不会改变选择，悬停和选中高亮保持固定行尺寸。
 
-迁移已有资源可进入 **设置 → 资源管理 → 资源导入 → 从 magpie 导入 MCP 和 Skill**。默认读取 `~/.config/magpie`（设置了 `XDG_CONFIG_HOME` 时读取其下的 `magpie`）；便携版可选择安装目录或 `data` 目录。导入会保存标准 stdio/HTTP MCP 配置、备注，并直接引用本地 Skill 目录，也支持 Skill 根目录本身是软链接。同类型同名条目跳过，缺失或不兼容的条目逐项显示原因；SSE、带禁用工具或启动超时覆盖的服务暂不支持导入。不会修改 magpie 原始文件；agent 分配、OAuth 登录态、插件运行状态不随资源迁移。导入后仍需在列表中选择资源并复制到目标项目。
+迁移已有资源可进入 **设置 → 资源导入 → 从 magpie 导入 MCP 和 Skill**。默认读取 `~/.config/magpie`（设置了 `XDG_CONFIG_HOME` 时读取其下的 `magpie`）；便携版可选择安装目录或 `data` 目录。导入会保存标准 stdio/HTTP MCP 配置、备注，并直接引用本地 Skill 目录，也支持 Skill 根目录本身是软链接。同类型同名条目跳过，缺失或不兼容的条目逐项显示原因；SSE、带禁用工具或启动超时覆盖的服务暂不支持导入。不会修改 magpie 原始文件；agent 分配、OAuth 登录态、插件运行状态不随资源迁移。导入后仍需在列表中选择资源并复制到目标项目。
 
 ![MCP 与 Skill 资源库（示例数据）](docs/library-preview.png)
 
@@ -91,7 +91,7 @@ Windows 双击 exe；macOS 通过 Finder 打开 `.app`；Linux 在桌面会话�
 
 用户原先通过 Windows 启动目录快捷方式实现的开机启动，可将该快捷方式目标改为新版 exe；“启动时隐藏窗口”继续生效。
 
-启动时提前读取首屏图标（最多 128 张，等待上限 500 毫秒），并在显示前准备界面。Windows 会在窗口仍隐藏时完成真实 GPU 首帧，不闪现窗口或抢焦点；系统图标在后台 COM 线程提取。之后每次唤出也先准备当前帧。macOS/Linux 预热布局和文字，GPU 呈现仍由桌面后端在窗口映射时初始化。极慢或不可用目标会保留占位图标并继续后台加载，避免阻止窗口使用。
+NSGo 按可见区域创建卡片。系统图标在后台读取，加载时先显示名称首字母，读取完成后自动替换。
 
 ## 数据与旧版迁移
 
@@ -111,14 +111,14 @@ Windows 双击 exe；macOS 通过 Finder 打开 `.app`；Linux 在桌面会话�
 
 ## 开发与构建
 
-Go 工具链通过 [mise](https://mise.jdx.dev/) 管理，版本固定为 1.27.3；MyGo 使用 v0.9.1 稳定版，依赖由 `go.mod` / `go.sum` 锁定。构建脚本仅使用 Python 标准库。
+Go 工具链通过 [mise](https://mise.jdx.dev/) 管理，版本固定为 1.27.3。界面使用 NSGo v0.2.0，依赖由 `go.mod` / `go.sum` 锁定。构建脚本仅使用 Python 标准库。
 
-界面回归使用 [MyGo `ui.NewTester`](https://mygo.egoist.dev/docs/ui/testing)，不打开窗口，在内存中模拟输入、点击、拖动、滚动、键盘与布局；拖拽测试覆盖 100% / 200% 缩放。运行下面的 `go test` 不会弹出应用窗口。
+默认界面使用 NSGo 的无窗口测试驱动，覆盖命令添加、MCP 保存与置顶、定时任务保存、设置导航和快捷键注册失败后的恢复。旧界面回归用例使用 [MyGo `ui.NewTester`](https://mygo.egoist.dev/docs/ui/testing)，不打开窗口，在内存中模拟输入、点击、拖动、滚动、键盘与布局；拖拽测试覆盖 100% / 200% 缩放。运行下面的 `go test` 不会弹出应用窗口。
 
 ```sh
 mise install go@1.27.3
 mise exec go@1.27.3 -- go run ./cmd/quickstart
-mise exec go@1.27.3 -- go test ./...
+mise exec go@1.27.3 python@3.15.2 -- go test ./...
 mise exec go@1.27.3 -- go test -race ./...
 mise exec go@1.27.3 -- go vet ./...
 ```
@@ -127,6 +127,6 @@ mise exec go@1.27.3 -- go vet ./...
 python -X utf8 "scripts/build.py"
 ```
 
-构建脚本固定只生成 `windows-amd64`，每次覆盖 `bin/windows-amd64/my-quickstart-go.exe`；`bin` 下只保留此构建目录。原来的 `--os windows --arch amd64` 参数仍可使用，其他目标会被拒绝。图标源文件位于 `internal/branding`；Windows x64 图标资源已预生成到 `cmd/quickstart/icon_windows_amd64.syso`，正常构建不需要资源编译器。更换 ICO 时，可用 LLVM 的 `windres` 编译 `internal/branding/icon.rc` 为 `.res`，再用 `llvm-cvtres /MACHINE:X64` 更新对应 `.syso`。构建使用 `CGO_ENABLED=0`，运行时使用 MyGo 的原生系统接口。
+构建脚本固定只生成 `windows-amd64`，每次覆盖 `bin/windows-amd64/my-quickstart-go.exe`；`bin` 下只保留此构建目录。原来的 `--os windows --arch amd64` 参数仍可使用，其他目标会被拒绝。图标源文件位于 `internal/branding`；Windows x64 图标资源已预生成到 `cmd/quickstart/icon_windows_amd64.syso`，正常构建不需要资源编译器。更换 ICO 时，可用 LLVM 的 `windres` 编译 `internal/branding/icon.rc` 为 `.res`，再用 `llvm-cvtres /MACHINE:X64` 更新对应 `.syso`。Windows 构建使用 `CGO_ENABLED=0`。
 
 源代码：`cmd/quickstart` 为入口，`internal/launcher` 为原生界面及交互，`internal/model` 为状态，`internal/store` 为 SQLite 和迁移，`internal/platform` 为平台启动及快捷方式，`internal/logging` 为异步日志。
