@@ -199,7 +199,7 @@ func (a *App) behaviorSettings(c *ui.Context) {
 		if a.settingToggle(c, a.text("窗口置顶", "Always on top"), a.text("让启动器显示在其他窗口上方。", "Keep the launcher above other windows."), &s.AlwaysOnTop) && a.window != nil {
 			a.window.SetAlwaysOnTop(s.AlwaysOnTop)
 		}
-		a.settingToggle(c, a.text("双击卡片区域空白处隐藏", "Hide on double click in empty grid space"), a.text("有托盘或全局快捷键时可隐藏窗口。", "Hiding requires a tray or a global shortcut."), &s.DblClickBlankToHide)
+		a.settingToggle(c, a.text("双击页面空白处隐藏窗口", "Double-click empty space to hide the window"), a.text("有托盘或全局快捷键时可隐藏窗口。", "Hiding requires a tray or a global shortcut."), &s.DblClickBlankToHide)
 		a.settingRow(c, a.text("隐藏后返回应用启动（秒）", "Return to launcher after hiding (seconds)"), a.text("在其他页面隐藏后开始计时；提前打开保留原页面。范围 1–3600 秒。", "Start counting when hidden on another page; reopen early to keep that page. Range: 1–3600 seconds."), func() {
 			if ui.NumberInput(c, &s.ReturnToLauncherSeconds, 1, 3600, 1).Label(a.text("自动返回等待秒数", "Return delay in seconds")).Width(160).Changed() {
 				a.changed()

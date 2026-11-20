@@ -214,7 +214,10 @@ func (p *Panel) taskList(c *ui.Context) {
 }
 
 func (p *Panel) taskRow(c *ui.Context, task model.ScheduledTask, now time.Time) {
-	ui.Column(c.Key(task.ID)).FillWidth().Padding(12).Margin(0, 0, 8, 0).Gap(6).Background(c.Theme().Surface).Radius(8).Children(func() {
+	card := ui.Column(c.Key(task.ID)).FillWidth().Padding(12).Margin(0, 0, 8, 0).Gap(6).Background(c.Theme().Surface).Radius(8)
+	// Keep double-clicks on task details from reaching the page's empty-space action.
+	card.DoubleClicked()
+	card.Children(func() {
 		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, task.Name).Bold().SingleLine().Tooltip(task.Name).Grow(1)
 			ui.Text(c, p.tr("每天 ", "Daily ")+task.Time).TextColor(c.Theme().Accent)

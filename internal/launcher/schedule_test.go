@@ -150,8 +150,21 @@ func TestScheduledTabAndSettingsNavigation(t *testing.T) {
 			if a.searchOpen {
 				t.Fatal("launcher search leaked into scheduled tasks")
 			}
+			nav := map[string]ui.Rect{}
+			for _, label := range []string{a.text("应用启动", "Launcher"), "MCP / Skills", a.text("定时任务", "Scheduled tasks"), a.text("设置", "Settings")} {
+				rect, ok := tt.Find(label)
+				if !ok {
+					t.Fatal("missing navigation tab", label)
+				}
+				nav[label] = rect
+			}
 			if err := tt.Click(a.text("设置", "Settings")); err != nil {
 				t.Fatal(err)
+			}
+			for label, before := range nav {
+				if after, ok := tt.Find(label); !ok || after != before {
+					t.Fatalf("opening settings moved %q at width %d: %v -> %v", label, size.w, before, after)
+				}
 			}
 			if err := tt.Click(a.text("定时任务", "Scheduled tasks")); err != nil {
 				t.Fatal(err)

@@ -20,6 +20,60 @@ func fixture() *App {
 	return New(s, nil)
 }
 
+func TestNonLauncherBlankDoubleClick(t *testing.T) {
+	for _, page := range []string{"library", "schedule", "settings"} {
+		t.Run(page, func(t *testing.T) {
+			a := fixture()
+			a.SetLibrary(t.TempDir())
+			a.registeredHotkey = "Ctrl+Alt+Space"
+			// During startup hide cancels the pending show without a native window.
+			a.warming, a.showPending = true, true
+			var controls []string
+			x, y := float32(440), float32(360)
+			switch page {
+			case "library":
+				a.mainTab, controls = 1, []string{"Search resources"}
+			case "schedule":
+				a.mainTab, controls = 2, []string{"Search tasks", "Task details"}
+				a.state.Tasks = []model.ScheduledTask{{ID: "test", Name: "Task details", Time: "12:30"}}
+			case "settings":
+				a.openSettings()
+				a.settingsTab, controls = 2, []string{"Always on top"}
+				x, y = 80, 600
+			}
+			tt := ui.NewTester(a.view, 960, 620)
+			doubleClick := func(x, y float32) {
+				tt.ClickAt(x, y)
+				tt.ClickAt(x, y)
+			}
+			for _, label := range controls {
+				rect, ok := tt.Find(label)
+				if !ok {
+					t.Fatal("missing control", label)
+				}
+				doubleClick(rect.X+rect.W/2, rect.Y+rect.H/2)
+				if !a.showPending {
+					t.Fatalf("double click on %q hid the window", label)
+				}
+			}
+			tt.ClickAt(x, y)
+			if !a.showPending {
+				t.Fatal("single click on empty space hid the window")
+			}
+			tt.ClickAt(x, y)
+			if a.showPending {
+				t.Fatal("double click on empty space did not hide the window")
+			}
+			a.showPending, a.state.Settings.DblClickBlankToHide = true, false
+			tt.Frame()
+			doubleClick(x+12, y)
+			if !a.showPending {
+				t.Fatal("disabled double-click action hid the window")
+			}
+		})
+	}
+}
+
 func TestEntryOperations(t *testing.T) {
 	a := fixture()
 	first := a.state.Groups[0].ID

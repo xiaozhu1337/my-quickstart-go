@@ -33,7 +33,11 @@ func (a *App) view(c *ui.Context) {
 			a.filter()
 		})
 	}
-	ui.Column(c).Fill().Children(func() {
+	page := ui.Column(c).Fill()
+	if (a.settingsOpen || a.mainTab != 0) && a.state.Settings.DblClickBlankToHide && page.DoubleClicked() {
+		a.deferAction(a.hide)
+	}
+	page.Children(func() {
 		a.mainTabsView(c)
 		if a.library != nil {
 			a.library.Language = a.state.Settings.Language
@@ -116,28 +120,40 @@ func (a *App) mainTabsView(c *ui.Context) {
 			selected = i
 		}
 	}
-	ui.Row(c).Label(a.text("主导航", "Main navigation")).FillWidth().AlignItems(ui.Center).Children(func() {
-		disabled := a.editorOpen || a.renameOpen || a.addOpen || (a.mainTab == 2 && a.schedule.ModalOpen())
-		if a.settingsOpen {
-			for i, label := range labels {
-				button := ui.ButtonBase(c.Key("settings-return-"+label)).Padding(10, 12).Label(label).Disabled(disabled)
-				button.Children(func() { ui.Text(c, label).TextColor(c.Theme().TextMuted) })
-				if button.Clicked() {
-					a.mainTab, a.settingsOpen = ids[i], false
-				}
+	settingsIndex := len(labels)
+	labels = append(labels, a.text("设置", "Settings"))
+	if a.settingsOpen {
+		selected = settingsIndex
+	}
+	tabs := ui.TabsBase(c, &selected, len(labels))
+	theme := c.Theme()
+	disabled := a.editorOpen || a.renameOpen || a.addOpen || (a.mainTab == 2 && a.schedule.ModalOpen())
+	tabs.List.Label(a.text("主导航", "Main navigation")).FillWidth().AlignItems(ui.Center).Gap(theme.Space(1)).Children(func() {
+		for i, label := range labels {
+			if i == settingsIndex {
+				ui.Box(c).Grow(1)
 			}
-		} else if ui.Tabs(c, &selected, labels...).Disabled(disabled).Changed() {
-			a.mainTab, a.settingsOpen = ids[selected], false
-		}
-		ui.Box(c).Grow(1)
-		button := ui.Button(c, a.text("设置", "Settings")).Margin(0, 12).Disabled(disabled)
-		if a.settingsOpen {
-			button.Background(c.Theme().Accent.Alpha(0.14))
-		}
-		if button.Clicked() {
-			a.openSettings()
+			tab := tabs.Tab(i).Label(label).Disabled(disabled).Padding(theme.Space(2), theme.Space(3))
+			if i == settingsIndex {
+				tab.Margin(0, 12)
+			}
+			color, underline := theme.TextMuted, ui.Transparent
+			if i == selected {
+				color, underline = theme.Text, theme.Accent
+			} else if tab.Hovered() {
+				color = theme.Text
+			}
+			tab.BorderWidth(0, 0, 2, 0).BorderColor(underline)
+			tab.Children(func() { ui.Text(c, label).SingleLine().TextColor(color) })
 		}
 	})
+	if tabs.List.Changed() {
+		if selected == settingsIndex {
+			a.openSettings()
+		} else {
+			a.mainTab, a.settingsOpen = ids[selected], false
+		}
+	}
 	ui.Divider(c)
 }
 
