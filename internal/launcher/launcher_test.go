@@ -26,6 +26,23 @@ func TestNSGoPages(t *testing.T) {
 	app := nsgotest.StartApp(t, a.Mount, nsgotest.Environment(core.Environment{OS: core.OSWindows, Idiom: core.IdiomDesktop}), nsgotest.Size(960, 620), nsgotest.HotKeyTaken("ctrl+alt+k"))
 	defer a.Close()
 	press := func(name string) { t.Helper(); app.Press("role:button " + name); app.Settle() }
+	checkMount := func(selector string) func() {
+		t.Helper()
+		id := app.Find(selector).ID
+		return func() {
+			t.Helper()
+			if app.Find(selector).ID != id {
+				t.Fatalf("%s was remounted", selector)
+			}
+		}
+	}
+	checkNav := checkMount("role:button Settings")
+	checkGroup := checkMount("role:button New group")
+	press("Add command")
+	checkNav()
+	checkGroup()
+	press("Cancel")
+	checkGroup()
 	press("Add command")
 	app.Type("label:Name", "Example")
 	app.Type("label:Command text", "echo example")
@@ -33,18 +50,34 @@ func TestNSGoPages(t *testing.T) {
 	if len(a.results) != 1 || a.results[0].Name != "Example" {
 		t.Fatalf("saved entries: %+v", a.results)
 	}
+	checkNav()
+	press("Search")
+	app.Type("label:Search", "Example")
+	checkSearch := checkMount("id:launcher-search")
+	a.post(func() { a.message = "Completed" })
+	app.WaitFor("text:Completed", time.Second)
+	checkSearch()
+	press("Dismiss")
+	checkSearch()
+	app.Key("escape")
 	press("MCP / Skills")
+	checkLibrary := checkMount("role:button Add MCP")
 	press("Add MCP")
+	checkLibrary()
 	app.Type("label:Name", "example-mcp")
 	press("Save")
 	app.WaitFor("label:example-mcp", 3*time.Second)
+	checkResource := checkMount("label:example-mcp")
 	app.Press("label:example-mcp")
+	checkResource()
 	app.Find("text:1 selected")
 	press("Pin")
 	app.WaitFor("role:button Unpin", 3*time.Second)
 	app.Find("text:1 selected")
 	press("Scheduled tasks")
+	checkTasks := checkMount("role:button Add task")
 	press("Add task")
+	checkTasks()
 	app.Type("label:Task name", "Example schedule")
 	app.Type("label:Command (including arguments)", "echo scheduled")
 	press("Save")

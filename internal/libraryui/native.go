@@ -23,14 +23,12 @@ func (p *Panel) status() string {
 func (p *Panel) ModalOpen() bool { return p.editOpen || p.skillOpen || p.removeOpen || p.probeOpen }
 
 func (p *Panel) Native(v w.Page) core.Node {
-	if p.ModalOpen() {
-		return p.nativeDialog(v)
-	}
 	disabled := p.Busy || p.store == nil
 	all := p.tr("全部", "All")
 	if p.kind != "MCP" && p.kind != "Skill" {
 		p.kind = all
 	}
+	selectedCount := core.NewSignal(v.Scope, len(p.ids()))
 	filter := w.Select(p.tr("资源类型", "Resource type"), p.kind, []string{all, "MCP", "Skill"}, func(s string) { p.kind = s; v.Refresh() })
 	actions := w.Row(v.Primary(p.tr("添加 MCP", "Add MCP"), func() { p.edit(library.Item{}) }, disabled),
 		v.Button(p.tr("添加 Skill", "Add skill"), func() { p.skillID, p.skillName, p.source, p.failure = "", "", "", ""; p.skillOpen = true }, disabled))
@@ -94,8 +92,16 @@ func (p *Panel) Native(v w.Page) core.Node {
 				row.Style.BorderColor = v.Scope.Palette().Border
 				row.Role, row.Label = core.RoleCheckbox, item.Name
 				row.Disabled = func() bool { return disabled }
-				row.Checked = func() bool { return p.selected[item.ID] }
-				row.OnPress = func(core.PressEvent) { p.selected[item.ID] = !p.selected[item.ID]; v.Refresh() }
+				row.Checked = func() bool { selectedCount.Get(); return p.selected[item.ID] }
+				row.OnPress = func(core.PressEvent) {
+					if p.selected[item.ID] {
+						delete(p.selected, item.ID)
+						selectedCount.Set(selectedCount.GetUntracked() - 1)
+					} else {
+						p.selected[item.ID] = true
+						selectedCount.Set(selectedCount.GetUntracked() + 1)
+					}
+				}
 				row.Style.Padding = core.All(6)
 				row.Style.CornerRadius = 6
 				hover := core.NewSignal(v.Scope, false)
@@ -104,7 +110,7 @@ func (p *Panel) Native(v w.Page) core.Node {
 				row.StyleFunc = func() core.Style {
 					palette := v.Scope.Palette()
 					color := palette.Surface
-					if p.selected[item.ID] {
+					if row.Checked() {
 						color = palette.SurfacePressed
 					} else if hover.Get() {
 						color = palette.SurfaceHover
@@ -119,15 +125,22 @@ func (p *Panel) Native(v w.Page) core.Node {
 	browser.Style.FlexBasis = core.Pt(0)
 	browse := v.Directory(p.tr("浏览", "Browse"), &p.project, p.fail)
 	agent := w.Select("Agent", p.agent, []string{"codex", "pi"}, func(s string) { p.agent = s; v.Refresh() })
-	count := len(p.ids())
-	deploy := v.Panel(w.Spread(w.Heading(p.tr("项目部署", "Project deployment")), v.Muted(fmt.Sprintf(p.tr("已选 %d 项", "%d selected"), count))),
+	countLabel := core.Dynamic(func(*core.Scope) core.Node {
+		return v.Muted(fmt.Sprintf(p.tr("已选 %d 项", "%d selected"), selectedCount.Get()))
+	})
+	deploy := v.Panel(w.Spread(w.Heading(p.tr("项目部署", "Project deployment")), countLabel),
 		w.Spread(w.Text(p.tr("项目目录", "Project directory")), browse),
 		w.Input(p.tr("项目目录", "Project directory"), &p.project, false),
-		w.Text(p.tr("目标工具", "Target agent")), agent, v.Primary(p.tr("复制到项目", "Copy to project"), p.nativeDeploy, disabled || count == 0))
-	if count > 0 {
-		deploy.Children = append(deploy.Children, w.Row(v.Button(p.tr("取消选择", "Clear selection"), p.ClearSelection, disabled),
-			v.Button(p.tr("从库移除", "Remove from library"), func() { p.removeOpen = true }, disabled)))
-	}
+		w.Text(p.tr("目标工具", "Target agent")), agent, core.Dynamic(func(*core.Scope) core.Node {
+			count := selectedCount.Get()
+			copyButton := v.Primary(p.tr("复制到项目", "Copy to project"), p.nativeDeploy, disabled || count == 0)
+			if count == 0 {
+				return copyButton
+			}
+			clear := w.Page{Scope: v.Scope, Refresh: func() { selectedCount.Set(0) }}
+			return w.Column(copyButton, w.Row(clear.Button(p.tr("取消选择", "Clear selection"), p.ClearSelection, disabled),
+				v.Button(p.tr("从库移除", "Remove from library"), func() { p.removeOpen = true }, disabled)))
+		}))
 	if status := p.status(); status != "" {
 		deploy.Children = append(deploy.Children, w.Text(status))
 	}
@@ -140,7 +153,7 @@ func (p *Panel) Native(v w.Page) core.Node {
 		return w.Column(w.Row(v.Button(p.tr("返回资源列表", "Back to resources"), func() { p.compactDeployment = false })), w.Form(deploy))
 	}
 	open := v.Button(p.tr("项目部署", "Project deployment"), func() { p.compactDeployment = true })
-	return w.Column(browser, w.Spread(v.Muted(fmt.Sprintf(p.tr("已选 %d 项", "%d selected"), count)), open))
+	return w.Column(browser, w.Spread(countLabel, open))
 }
 
 func (p *Panel) nativeDeploy() {
@@ -160,7 +173,7 @@ func (p *Panel) nativeDeploy() {
 	}, false)
 }
 
-func (p *Panel) nativeDialog(v w.Page) core.Node {
+func (p *Panel) NativeDialog(v w.Page) core.Node {
 	cancel := v.Button(p.tr("取消", "Cancel"), func() { p.editOpen, p.skillOpen, p.removeOpen = false, false, false }, p.Busy)
 	switch {
 	case p.editOpen:
@@ -199,7 +212,11 @@ func (p *Panel) nativeDialog(v w.Page) core.Node {
 			}
 			nodes = append(nodes, w.List(len(r.Tools), 1, 68, func(i int) any { return i }, func(i int) core.Node { return w.Column(w.Text(r.Tools[i].Name), w.Text(r.Tools[i].Description)) }))
 		}
-		return w.Column(nodes...)
+		body := w.Column(nodes...)
+		if len(p.probeResult.Tools) > 0 && p.probeError == "" {
+			body.Style.Height = core.Pt(min(460, v.Scope.Env().Window().Height-80))
+		}
+		return body
 	}
 }
 

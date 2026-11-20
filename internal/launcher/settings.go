@@ -57,7 +57,20 @@ func (a *App) nativeSettings(v w.Page) core.Node {
 	}
 	var items []core.Node
 	toggle := func(label string, val *bool, invert bool) {
-		items = append(items, w.Toggle(label, *val != invert, func(on bool) { *val = on != invert; a.nativeAppearance(); a.changed() }))
+		checked := core.NewSignal(v.Scope, *val != invert)
+		items = append(items, nsw.Checkbox{Text: label, Checked: checked.Get, OnChange: func(on bool) {
+			checked.Set(on)
+			*val = on != invert
+			if val == &s.AlwaysOnTop {
+				level := core.WindowLevelNormal
+				if *val {
+					level = core.WindowLevelFloating
+				}
+				v.Scope.SetWindowLevel(level)
+			}
+			a.queueSave()
+			a.syncNative()
+		}})
 	}
 	number := func(label string, val *float64, low, high, step float64) {
 		items = append(items, w.Spread(w.Text(label), nsw.NumberInput{Label: label, Value: func() float64 { return *val }, Min: low, Max: high, Step: step, Style: core.Style{Width: core.Pt(130)}, OnChange: func(x float64) { *val = x; a.changed() }}))

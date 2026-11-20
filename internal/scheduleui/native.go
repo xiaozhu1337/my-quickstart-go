@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/ui"
+
 	"my-quickstart-go/internal/model"
 	w "my-quickstart-go/internal/nativeui"
 	"my-quickstart-go/internal/platform"
@@ -20,12 +22,13 @@ func (p *Panel) StartWithDispatch(dispatch func(func())) {
 	p.arm()
 }
 
-func (p *Panel) Native(v w.Page) core.Node {
+func (p *Panel) NativeDialog(v w.Page) core.Node {
 	if p.editOpen {
+		enabled := core.NewSignal(v.Scope, p.draft.Enabled)
 		return v.Editor(p.tr("定时任务", "Scheduled task"), w.Field(p.tr("任务名称", "Task name"), &p.draft.Name, false),
 			w.Field(p.tr("每天执行时间（HH:MM）", "Daily time (HH:MM)"), &p.draft.Time, false),
 			w.Field(p.tr("执行命令（含参数）", "Command (including arguments)"), &p.draft.Command, false),
-			w.Toggle(p.tr("启用此任务", "Enable this task"), p.draft.Enabled, func(x bool) { p.draft.Enabled = x; v.Refresh() }),
+			ui.Checkbox{Text: p.tr("启用此任务", "Enable this task"), Checked: enabled.Get, OnChange: func(x bool) { p.draft.Enabled = x; enabled.Set(x) }},
 			w.Text(p.failure), w.Row(v.Button(p.tr("取消", "Cancel"), func() { p.editOpen = false }), v.Primary(p.tr("保存", "Save"), p.save, p.running[p.draft.ID])))
 	}
 	if p.removing {
@@ -36,6 +39,10 @@ func (p *Panel) Native(v w.Page) core.Node {
 		return v.Editor(p.tr("删除定时任务", "Delete scheduled task"), w.Text(name), w.Row(
 			v.Button(p.tr("取消", "Cancel"), func() { p.removing = false }), v.Button(p.tr("确认删除", "Confirm delete"), p.remove, p.running[p.removeID])))
 	}
+	return nil
+}
+
+func (p *Panel) Native(v w.Page) core.Node {
 	return w.Column(w.Spread(v.Muted(p.tr("按本地时间每天执行，隐藏到托盘后继续运行。", "Runs daily in local time, including in the tray.")),
 		v.Primary(p.tr("新增任务", "Add task"), func() { p.edit(model.ScheduledTask{Time: "09:00", Enabled: true}) })),
 		w.Search(v.Scope, p.tr("搜索任务", "Search tasks"), &p.query, func(query string) core.Node {

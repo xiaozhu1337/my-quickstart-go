@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
 	nsw "github.com/nsgo-dev/nsgo/ui"
 
@@ -18,98 +19,199 @@ import (
 	"my-quickstart-go/internal/platform"
 )
 
-func (a *App) nativePage(cx *core.Scope) core.Node {
-	v := w.Page{Scope: cx, Refresh: a.native.refresh}
+type nativeRoute struct {
+	tab                                 int
+	settings, hideLibrary, hideSchedule bool
+	language, theme, font               string
+	fontSize                            float64
+}
+
+const (
+	dialogNone = iota
+	dialogLauncher
+	dialogLibrary
+	dialogSchedule
+)
+
+func (a *App) currentRoute() nativeRoute {
 	s := a.state.Settings
-	if a.library != nil {
-		a.library.Language = s.Language
-	}
-	a.schedule.Language = s.Language
 	if a.mainTab == 1 && s.HideLibraryTab || a.mainTab == 2 && s.HideScheduleTab {
 		a.mainTab = 0
 	}
-	var nav []core.Node
-	if !a.launcherOnly() {
-		labels := []string{a.text("应用启动", "Launcher"), "MCP / Skills", a.text("定时任务", "Scheduled tasks")}
-		for i, label := range labels {
-			if i == 1 && s.HideLibraryTab || i == 2 && s.HideScheduleTab {
-				continue
-			}
-			variant := nsw.ButtonGhost
-			if a.mainTab == i {
-				variant = nsw.ButtonPrimary
-			}
-			nav = append(nav, nsw.Button{Text: label, Variant: variant, OnPress: v.Action(func() { a.mainTab = i; a.settingsOpen = false })})
-		}
-		nav = append(nav, v.Button(a.text("设置", "Settings"), a.openSettings))
-	}
-	var body core.Node
+	return nativeRoute{a.mainTab, a.settingsOpen, s.HideLibraryTab, s.HideScheduleTab, s.Language, s.Theme, s.FontFamily, s.FontSize}
+}
+
+func (a *App) currentDialog() int {
 	switch {
-	case a.editorOpen || a.renameOpen || a.addOpen:
-		nav = nil
-		body = a.nativeDialog(v)
 	case a.settingsOpen:
-		nav = nil
-		body = a.nativeSettings(v)
-	case a.mainTab == 2:
-		if a.schedule.ModalOpen() {
-			nav = nil
-		}
-		body = a.schedule.Native(v)
-	case a.mainTab == 1 && a.library != nil:
-		if a.library.ModalOpen() {
-			nav = nil
-		}
-		body = a.library.Native(v)
+		return dialogNone
+	case a.mainTab == 0 && (a.editorOpen || a.renameOpen || a.addOpen):
+		return dialogLauncher
+	case a.mainTab == 1 && a.library != nil && a.library.ModalOpen():
+		return dialogLibrary
+	case a.mainTab == 2 && a.schedule.ModalOpen():
+		return dialogSchedule
 	default:
-		body = a.nativeLauncher(v)
+		return dialogNone
 	}
-	var nodes []core.Node
-	if len(nav) > 0 {
-		tabs := w.Row(nav[:len(nav)-1]...)
-		if cx.Env().Window().Width >= 680 {
-			mark := core.Image{Source: core.ImageSource{Data: branding.PNG}, ResizeMode: core.Contain, Style: core.Style{Width: core.Pt(26), Height: core.Pt(26), Margin: core.Edges{Right: 6}}}
-			tabs.Children = append([]core.Node{mark}, tabs.Children...)
+}
+
+func bump(signal *core.Signal[int]) { signal.Update(func(i int) int { return i + 1 }) }
+
+// syncNative publishes only changed values. Showing the window or finishing a
+// launch must preserve the mounted controls, their focus and scroll position.
+func (a *App) syncNative() {
+	n := a.native
+	route := a.currentRoute()
+	if a.library != nil {
+		a.library.Language = route.language
+	}
+	a.schedule.Language = route.language
+	n.route.Set(route)
+	n.dialog.Set(a.currentDialog())
+	n.message.Set(a.message)
+	n.search.Set(a.searchOpen)
+}
+
+func (a *App) nativePage(cx *core.Scope) core.Node {
+	n := a.native
+	a.syncNative()
+	page := w.Column(core.Dynamic(func(cx *core.Scope) core.Node {
+		route := n.route.Get()
+		if route.settings || a.launcherOnly() {
+			return nil
 		}
-		header := w.Spread(tabs, nav[len(nav)-1])
-		header.Style.Padding = core.Edges{Bottom: 10}
-		header.Style.Borders = core.Edges{Bottom: 1}
-		header.Style.BorderColor = cx.Palette().Border
-		nodes = append(nodes, header)
+		return a.nativeNav(w.Page{Scope: cx, Refresh: a.syncNative})
+	}), core.Dynamic(func(cx *core.Scope) core.Node {
+		route := n.route.Get()
+		v := w.Page{Scope: cx, Refresh: a.syncNative}
+		if !route.settings && route.tab == 0 {
+			return a.nativeLauncher(v)
+		}
+		n.content.Get()
+		v.Refresh = func() {
+			old := n.dialog.GetUntracked()
+			a.syncNative()
+			if n.route.GetUntracked() == route && old == n.dialog.GetUntracked() {
+				bump(n.content)
+			}
+		}
+		switch {
+		case route.settings:
+			return a.nativeSettings(v)
+		case route.tab == 1 && a.library != nil:
+			return a.library.Native(v)
+		case route.tab == 2:
+			return a.schedule.Native(v)
+		default:
+			return a.nativeLauncher(v)
+		}
+	}), core.Dynamic(func(cx *core.Scope) core.Node {
+		if msg := n.message.Get(); msg != "" {
+			v := w.Page{Scope: cx, Refresh: a.syncNative}
+			return w.Row(w.Text(msg), v.Button(a.text("清除提示", "Dismiss"), func() { a.message = "" }))
+		}
+		return nil
+	}), core.Dynamic(a.dialogLayer))
+	page.Style.Padding, page.Style.Gap = core.All(14), 12
+	page.StyleFunc = func() core.Style {
+		s := n.route.Get()
+		return core.Style{Background: cx.Palette().Background, FontFamily: fontName(s.font), FontSize: core.Points(s.fontSize)}
 	}
-	nodes = append(nodes, body)
-	if a.message != "" {
-		nodes = append(nodes, w.Row(w.Text(a.message), v.Button(a.text("清除提示", "Dismiss"), func() { a.message = "" })))
-	}
-	page := w.Column(nodes...)
-	page.Style.Padding = core.All(14)
-	page.Style.Gap = 12
-	page.Style.Background = cx.Palette().Background
-	page.Style.FontFamily = fontName(s.FontFamily)
-	page.Style.FontSize = core.Points(s.FontSize)
 	return page
+}
+
+func (a *App) dialogLayer(cx *core.Scope) core.Node {
+	n := a.native
+	kind := n.dialog.Get()
+	if kind == dialogNone {
+		return nil
+	}
+	body := core.Dynamic(func(cx *core.Scope) core.Node {
+		n.dialogContent.Get()
+		v := w.Page{Scope: cx, Refresh: func() {
+			a.syncNative()
+			if kind == n.dialog.GetUntracked() {
+				bump(n.dialogContent)
+			}
+		}}
+		switch kind {
+		case dialogLibrary:
+			return a.library.NativeDialog(v)
+		case dialogSchedule:
+			return a.schedule.NativeDialog(v)
+		default:
+			return a.nativeDialog(v)
+		}
+	})
+	return base.Dialog{DefaultOpen: true, NoCloseOnEscape: true, NoCloseOnBackdropPress: true,
+		BackdropStyle: core.Style{Background: core.RGBA(0, 0.28)},
+		PopupStyleFunc: func() core.Style {
+			size := cx.Env().Window()
+			return core.Style{Width: core.Pt(min(620, size.Width-40)), MaxHeight: core.Pt(size.Height - 40),
+				Padding: core.All(18), Background: cx.Palette().Surface, BorderColor: cx.Palette().Border, BorderWidth: 1, CornerRadius: 10}
+		}, Children: []core.Node{body}}
+}
+
+func (a *App) nativeNav(v w.Page) core.Node {
+	cx := v.Scope
+	s := a.state.Settings
+	var nav []core.Node
+	labels := []string{a.text("应用启动", "Launcher"), "MCP / Skills", a.text("定时任务", "Scheduled tasks")}
+	for i, label := range labels {
+		if i == 1 && s.HideLibraryTab || i == 2 && s.HideScheduleTab {
+			continue
+		}
+		variant := nsw.ButtonGhost
+		if a.mainTab == i {
+			variant = nsw.ButtonPrimary
+		}
+		nav = append(nav, nsw.Button{Text: label, Variant: variant, OnPress: v.Action(func() { a.mainTab = i; a.settingsOpen = false })})
+	}
+	tabs := w.Row(nav...)
+	if cx.Env().Window().Width >= 680 {
+		mark := core.Image{Source: core.ImageSource{Data: branding.PNG}, ResizeMode: core.Contain, Style: core.Style{Width: core.Pt(26), Height: core.Pt(26), Margin: core.Edges{Right: 6}}}
+		tabs.Children = append([]core.Node{mark}, tabs.Children...)
+	}
+	header := w.Spread(tabs, v.Button(a.text("设置", "Settings"), a.openSettings))
+	header.Style.Padding = core.Edges{Bottom: 10}
+	header.Style.Borders = core.Edges{Bottom: 1}
+	header.Style.BorderColor = cx.Palette().Border
+	return header
 }
 
 func (a *App) nativeLauncher(v w.Page) core.Node {
 	t := a.text
 	cx := v.Scope
-	search := v.Action(func() { a.searchOpen = true })
+	q := core.NewSignal(cx, a.query)
+	search := v.Action(func() {
+		if a.currentDialog() == dialogNone {
+			a.searchOpen = true
+		}
+	})
 	cx.OnKey("mod+f", search)
-	cx.OnKey("escape", v.Action(func() { a.searchOpen = false; a.query = ""; a.filter() }))
+	cx.OnKey("escape", v.Action(func() {
+		if a.searchOpen && a.currentDialog() == dialogNone {
+			a.searchOpen = false
+			a.query = ""
+			a.filter()
+			q.Set("")
+		}
+	}))
 	run := func() {
-		if len(a.results) > 0 {
+		if len(a.results) > 0 && a.currentDialog() == dialogNone {
 			a.launch(a.results[a.selected])
 		}
 	}
 	cx.OnKey("enter", run)
 	cx.OnKey("space", run)
-	q := core.NewSignal(cx, a.query)
 	var nodes []core.Node
-	if a.searchOpen {
-		nodes = append(nodes, nsw.Input{Label: t("搜索", "Search"), Placeholder: t("搜索所有分类…", "Search all groups…"), AutoFocus: true, DefaultValue: a.query, OnChange: func(s string) { a.query = s; a.filter(); q.Set(s) }, OnSubmit: func(string) { run() }})
-	}
+	nodes = append(nodes, core.Show{When: a.native.search.Get, Then: func(*core.Scope) core.Node {
+		return nsw.Input{TestID: "launcher-search", Label: t("搜索", "Search"), Placeholder: t("搜索所有分类…", "Search all groups…"), AutoFocus: true, DefaultValue: a.query, OnChange: func(s string) { a.query = s; a.filter(); q.Set(s) }, OnSubmit: func(string) { run() }}
+	}})
 	nodes = append(nodes, core.Dynamic(func(area *core.Scope) core.Node {
 		q.Get()
+		a.native.groups.Get()
 		return a.nativeGroups(w.Page{Scope: area, Refresh: v.Refresh})
 	}))
 	return w.Column(nodes...)
@@ -182,7 +284,7 @@ func (a *App) nativeGroups(v w.Page) core.Node {
 	columns := max(1, int((float64(cx.Env().Window().Width)-s.SidebarWidth-77)/(s.CardWidth+6)))
 	for key, step := range map[string]int{"left": -1, "right": 1, "up": -columns, "down": columns} {
 		cx.OnKey(key, func() {
-			if len(a.results) == 0 {
+			if len(a.results) == 0 || a.currentDialog() != dialogNone {
 				return
 			}
 			a.selected = max(0, min(len(a.results)-1, a.selected+step))

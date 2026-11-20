@@ -19,12 +19,16 @@ import (
 )
 
 type nativeWindow struct {
-	root, surface *core.Scope
-	window        *core.Window
-	tray          *core.Tray
-	refresh       func()
-	hotkey        *core.Signal[string]
-	icons         map[string]*core.Signal[[]byte]
+	root, surface                          *core.Scope
+	window                                 *core.Window
+	tray                                   *core.Tray
+	route                                  *core.Signal[nativeRoute]
+	dialog, content, groups, dialogContent *core.Signal[int]
+	search                                 *core.Signal[bool]
+	message                                *core.Signal[string]
+	quitPending                            bool
+	hotkey                                 *core.Signal[string]
+	icons                                  map[string]*core.Signal[[]byte]
 }
 
 type App struct {
@@ -87,10 +91,12 @@ type App struct {
 func (a *App) SetLibrary(root string) { a.library = libraryui.New(root) }
 
 func (a *App) Mount(cx *core.Scope) {
-	rev := core.NewSignal(cx, 0)
 	n := &nativeWindow{root: cx, hotkey: core.NewSignalFunc(cx, a.state.Settings.ToggleHotkey, nil), icons: make(map[string]*core.Signal[[]byte])}
 	a.native = n
-	n.refresh = func() { rev.Update(func(i int) int { return i + 1 }) }
+	n.route = core.NewSignal(cx, a.currentRoute())
+	n.dialog = core.NewSignal(cx, a.currentDialog())
+	n.content, n.groups, n.dialogContent = core.NewSignal(cx, 0), core.NewSignal(cx, 0), core.NewSignal(cx, 0)
+	n.search, n.message = core.NewSignal(cx, a.searchOpen), core.NewSignal(cx, a.message)
 	opts := core.WindowOptions{Title: "My Quickstart Go", Width: 960, Height: 620, Hidden: true, Constraints: core.WindowConstraints{MinWidth: 560, MinHeight: 380}}
 	if b := a.state.Settings.WindowBounds; a.state.Settings.RememberWindowBounds && b != nil && b.Width >= 560 && b.Height >= 380 {
 		for _, display := range cx.Env().Displays() {
@@ -105,37 +111,28 @@ func (a *App) Mount(cx *core.Scope) {
 		n.surface = surface
 		a.nativeAppearance()
 		surface.Effect(func() { a.captureNativeBounds() })
-		return core.Dynamic(func(page *core.Scope) core.Node { rev.Get(); return a.nativePage(page) })
+		return a.nativePage(surface)
 	})
 	cx.SetMainWindow(n.window)
 	cx.OnReopen(a.Show)
-	n.window.OnClosing(cx, func(e *core.WindowClosing) { e.Cancel(); a.hide() })
-	canQuit := func() bool {
-		if a.schedule.Busy() || (a.library != nil && a.library.Busy) {
-			a.report(errors.New(a.text("操作进行中，请稍后退出", "Operation in progress; please wait before quitting")))
-			a.Show()
-			return false
-		}
-		a.captureNativeBounds()
-		if a.Flush() != nil {
-			return false
-		}
-		a.quitting = true
-		a.schedule.Stop()
-		return true
-	}
-	cx.OnQuitRequest(func(q *core.QuitRequest) {
-		if !canQuit() {
-			q.Cancel()
+	n.window.OnClosing(cx, func(e *core.WindowClosing) {
+		if !a.quitting {
+			e.Cancel()
+			a.hide()
 		}
 	})
+	cx.OnQuitRequest(func(q *core.QuitRequest) { a.requestQuit(q.Defer()) })
 	n.tray = cx.NewTray(core.TrayOptions{Icon: branding.PNG, Tooltip: "My Quickstart Go", OnClick: a.Show, Menu: func() []core.MenuItem {
 		return []core.MenuItem{
 			{Label: a.text("显示 / 隐藏", "Show / Hide"), OnSelect: a.Toggle}, {Label: a.text("设置", "Settings"), OnSelect: func() { a.openSettings(); a.Show() }},
 			{Separator: true}, {Label: a.text("退出", "Quit"), OnSelect: func() {
-				if canQuit() {
-					cx.Quit()
-				}
+				cx.Post(func() {
+					a.requestQuit(func(ok bool) {
+						if ok {
+							cx.Quit()
+						}
+					})
+				})
 			}}}
 	}})
 	cx.Effect(func() {
@@ -167,12 +164,23 @@ func (a *App) Mount(cx *core.Scope) {
 						}
 					})
 				}
-				n.refresh()
+				a.syncNative()
 			}
 		})
 	})
 	if a.library != nil {
-		a.library.Dispatch = a.post
+		a.library.Dispatch = func(fn func()) {
+			n.root.Post(func() {
+				fn()
+				a.syncNative()
+				if (!a.settingsOpen && a.mainTab == 1) || (a.settingsOpen && a.settingsTab == 5) {
+					bump(n.content)
+					if a.currentDialog() == dialogLibrary {
+						bump(n.dialogContent)
+					}
+				}
+			})
+		}
 	}
 	a.schedule.StartWithDispatch(cx.Post)
 	if a.saver != nil {
@@ -192,9 +200,47 @@ func (a *App) Mount(cx *core.Scope) {
 	}
 }
 
+// requestQuit runs on the UI thread. A save can wait for SQLite's busy timeout.
+func (a *App) requestQuit(answer func(bool)) {
+	n := a.native
+	if n.quitPending {
+		answer(false)
+		return
+	}
+	if a.schedule.Busy() || (a.library != nil && a.library.Busy) {
+		a.report(errors.New(a.text("操作进行中，请稍后退出", "Operation in progress; please wait before quitting")))
+		a.Show()
+		answer(false)
+		return
+	}
+	a.captureNativeBounds()
+	if a.saver != nil && a.saver.dirty() {
+		n.quitPending = true
+		go func() {
+			err := a.saver.flush()
+			n.root.Post(func() {
+				n.quitPending = false
+				if err != nil {
+					a.report(err)
+					a.Show()
+					answer(false)
+					return
+				}
+				// Edits and scheduled launches may have happened during the write.
+				a.requestQuit(answer)
+			})
+		}()
+		return
+	}
+	a.quitting = true
+	a.cancelHiddenReturn()
+	a.schedule.Stop()
+	answer(true)
+}
+
 func (a *App) post(fn func()) {
 	if n := a.native; n != nil {
-		n.root.Post(func() { fn(); n.refresh() })
+		n.root.Post(func() { fn(); a.syncNative() })
 		return
 	}
 	a.window.Update(fn)
@@ -227,7 +273,12 @@ func New(state model.State, p persistence) *App {
 	if p != nil {
 		a.saver = newSaver(p)
 	}
-	a.schedule = scheduleui.New(&a.state.Tasks, a.changed, func() error {
+	a.schedule = scheduleui.New(&a.state.Tasks, func() {
+		a.queueSave()
+		if n := a.native; n != nil && a.mainTab == 2 && !a.settingsOpen {
+			bump(n.content)
+		}
+	}, func() error {
 		if a.saver != nil {
 			return a.saver.flush()
 		}
@@ -245,7 +296,7 @@ func (a *App) Show() {
 	if n := a.native; n != nil {
 		n.window.Show()
 		n.window.Focus()
-		n.refresh()
+		a.syncNative()
 		return
 	}
 	if a.warming {
@@ -355,15 +406,24 @@ func (a *App) Close() {
 	}
 }
 
+func (a *App) queueSave() {
+	if a.saver != nil {
+		a.saver.set(a.state)
+	}
+}
+
 func (a *App) changed() {
 	a.state.Normalize()
 	a.sidebar = float32(a.state.Settings.SidebarWidth)
 	a.filter()
-	if a.saver != nil {
-		a.saver.set(a.state)
-	}
+	a.queueSave()
 	if a.native != nil {
-		a.native.refresh()
+		a.syncNative()
+		if a.mainTab == 0 && !a.settingsOpen {
+			bump(a.native.groups)
+		} else {
+			bump(a.native.content)
+		}
 	}
 }
 func (a *App) deferAction(fn func()) { a.pending = append(a.pending, fn) }
@@ -373,6 +433,9 @@ func (a *App) report(err error) {
 	}
 	log.Print(err)
 	a.message = err.Error()
+	if a.native != nil {
+		a.native.message.Set(a.message)
+	}
 }
 func (a *App) text(zh, en string) string {
 	if a.state.Settings.Language == "en" {

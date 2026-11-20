@@ -52,12 +52,9 @@ func Spread(left, right core.Node) core.View {
 }
 
 func (p Page) Editor(title string, fields ...core.Node) core.Node {
-	card := p.Panel(append([]core.Node{Heading(title)}, fields...)...)
-	card.Style.Width = core.Pct(100)
-	card.Style.MaxWidth = core.Pt(720)
-	card.Style.AlignSelf = core.AlignCenter
-	card.Style.Padding = core.All(18)
-	return Form(card)
+	content := Column(append([]core.Node{Heading(title)}, fields...)...)
+	content.Style.FlexGrow = 0
+	return core.Scroll{Style: core.Style{FlexShrink: 1, MaxHeight: core.Pt(p.Scope.Env().Window().Height - 80)}, Children: []core.Node{content}}
 }
 
 func Text(value string) core.Node { return core.Text{Content: value} }
@@ -94,10 +91,6 @@ func Select(label, value string, options []string, change func(string)) core.Nod
 		items = append(items, ui.Option[string]{Value: opt, Label: opt})
 	}
 	return ui.Select[string]{Label: label, Options: items, Value: func() string { return value }, OnChange: change}
-}
-
-func Toggle(label string, checked bool, change func(bool)) core.Node {
-	return ui.Checkbox{Text: label, Checked: func() bool { return checked }, OnChange: change}
 }
 
 // Search updates only the results subtree, preserving the native field and caret.

@@ -41,7 +41,7 @@ func (a *App) nativeDialog(v w.Page) core.Node {
 	if a.uwpLoading {
 		status = t("正在读取应用列表…", "Loading applications…")
 	}
-	return w.Column(w.Row(w.Text(a.installedAppsTitle()), cancel), w.Text(status), w.Search(v.Scope, t("按名称搜索", "Filter by name"), &a.uwpQuery, func(q string) core.Node {
+	picker := w.Column(w.Row(w.Text(a.installedAppsTitle()), cancel), w.Text(status), w.Search(v.Scope, t("按名称搜索", "Filter by name"), &a.uwpQuery, func(q string) core.Node {
 		var entries []model.Entry
 		for _, e := range a.uwp {
 			if strings.Contains(strings.ToLower(e.Name), strings.ToLower(strings.TrimSpace(q))) {
@@ -53,6 +53,8 @@ func (a *App) nativeDialog(v w.Page) core.Node {
 			return v.Button(e.Name, func() { a.addEntries(a.state.ActiveGroupID, "", []model.Entry{e}); a.addOpen = false })
 		})
 	}))
+	picker.Style.Height = core.Pt(min(460, v.Scope.Env().Window().Height-80))
+	return picker
 }
 
 func (a *App) nativePick(v w.Page, dir bool) {
@@ -197,6 +199,9 @@ func (a *App) openAddApps() {
 		a.post(func() {
 			a.uwp = entries
 			a.uwpLoading = false
+			if a.native != nil && a.addOpen {
+				bump(a.native.dialogContent)
+			}
 			if err != nil {
 				a.uwpError = err.Error()
 				a.report(fmt.Errorf("%s: %w", a.text("读取系统应用失败", "Could not list applications"), err))
