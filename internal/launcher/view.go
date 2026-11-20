@@ -81,7 +81,7 @@ func (a *App) view(c *ui.Context) {
 					})
 				}).Grow(1).Changed() {
 					a.state.Settings.SidebarWidth = float64(a.sidebar)
-					a.changed()
+					a.settingsChanged()
 				}
 				a.statusView(c)
 			})

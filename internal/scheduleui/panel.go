@@ -14,26 +14,29 @@ import (
 
 // Panel state and timer callbacks are confined to the application's UI thread.
 type Panel struct {
-	Window   *mygo.Window
-	Language string
-	tasks    *[]model.ScheduledTask
-	changed  func()
-	flush    func() error
-	launch   func(model.ScheduledTask) error
-	dispatch func(func())
-	timer    *time.Timer
-	stopped  bool
-	running  map[string]bool
-	slots    chan struct{}
-	list     ui.ListState
-	query    string
-	page     int
-	editOpen bool
-	removeID string
-	removing bool
-	draft    model.ScheduledTask
-	failure  string
-	pending  []func()
+	Window      *mygo.Window
+	Language    string
+	tasks       *[]model.ScheduledTask
+	changed     func()
+	flush       func() error
+	launch      func(model.ScheduledTask) error
+	dispatch    func(func())
+	cancelTimer chan struct{}
+	filtered    []int
+	filterValid bool
+	filterQuery string
+	stopped     bool
+	running     map[string]bool
+	slots       chan struct{}
+	list        ui.ListState
+	query       string
+	page        int
+	editOpen    bool
+	removeID    string
+	removing    bool
+	draft       model.ScheduledTask
+	failure     string
+	pending     []func()
 }
 
 func New(tasks *[]model.ScheduledTask, changed func(), flush func() error) *Panel {
@@ -70,23 +73,78 @@ func (p *Panel) Start(window *mygo.Window) {
 
 func (p *Panel) Stop() {
 	p.stopped = true
-	if p.timer != nil {
-		p.timer.Stop()
+	p.disarm()
+}
+
+func (p *Panel) disarm() {
+	if p.cancelTimer != nil {
+		close(p.cancelTimer)
+		p.cancelTimer = nil
 	}
 }
 
 func (p *Panel) arm() {
-	if p.stopped {
+	p.disarm()
+	if p.stopped || p.dispatch == nil {
 		return
 	}
-	p.timer = time.AfterFunc(time.Second, func() {
-		p.dispatch(func() {
-			if !p.stopped {
+	now := time.Now()
+	var next time.Time
+	for _, t := range *p.tasks {
+		if p.running[t.ID] {
+			continue
+		}
+		due := t.NextRun(now)
+		if !due.IsZero() && (next.IsZero() || due.Before(next)) {
+			next = due
+		}
+	}
+	if next.IsZero() {
+		return
+	}
+	cancel := make(chan struct{})
+	p.cancelTimer = cancel
+	go func() {
+		waitForSchedule(now, next, cancel, func() {
+			p.dispatch(func() {
+				if p.cancelTimer != cancel {
+					return
+				}
 				p.tick(time.Now())
 				p.arm()
-			}
+			})
 		})
-	})
+	}()
+}
+
+// Check the wall clock off the UI thread so clock and zone changes can reschedule
+// the timer. Ordinary clock checks leave the window and task list untouched.
+func waitForSchedule(start, next time.Time, cancel <-chan struct{}, wake func()) {
+	_, offset := start.Zone()
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	for {
+		select {
+		case <-cancel:
+			return
+		case <-timer.C:
+			now := time.Now()
+			_, zone := now.Zone()
+			drift := now.Round(0).Sub(start.Round(0)) - now.Sub(start)
+			remaining := next.Sub(now.Round(0))
+			if remaining <= 0 || zone != offset || drift.Abs() > time.Second {
+				wake()
+				return
+			}
+			timer.Reset(min(time.Minute, remaining))
+		}
+	}
+}
+
+func (p *Panel) scheduleChanged() {
+	p.filterValid = false
+	p.changed()
+	p.arm()
 }
 
 func (p *Panel) task(id string) *model.ScheduledTask {
@@ -151,6 +209,9 @@ func (p *Panel) finish(id string, err error) {
 		log.Printf("scheduled task %q: %v", task.Name, err)
 	}
 	p.changed()
+	if p.dispatch != nil {
+		p.arm()
+	}
 }
 
 func (p *Panel) View(c *ui.Context) {
@@ -177,13 +238,18 @@ func (p *Panel) View(c *ui.Context) {
 const pageSize = 20
 
 func (p *Panel) taskList(c *ui.Context) {
-	var matches []int
-	query := strings.ToLower(strings.TrimSpace(p.query))
-	for i, task := range *p.tasks {
-		if strings.Contains(strings.ToLower(task.Name+" "+platform.ScheduledCommand(task)), query) {
-			matches = append(matches, i)
+	query := strings.TrimSpace(p.query)
+	if !p.filterValid || p.filterQuery != query {
+		q := strings.ToLower(query)
+		p.filtered = p.filtered[:0]
+		for i, t := range *p.tasks {
+			if q == "" || strings.Contains(strings.ToLower(t.Name+" "+platform.ScheduledCommand(t)), q) {
+				p.filtered = append(p.filtered, i)
+			}
 		}
+		p.filterValid, p.filterQuery = true, query
 	}
+	matches := p.filtered
 	pages := max(1, (len(matches)+pageSize-1)/pageSize)
 	p.page = min(p.page, pages-1)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -253,7 +319,7 @@ func (p *Panel) taskRow(c *ui.Context, task model.ScheduledTask, now time.Time) 
 				toggle = p.tr("停用", "Disable")
 			}
 			if ui.Button(c, toggle).Disabled(p.running[task.ID]).Clicked() {
-				p.pending = append(p.pending, func() { p.task(task.ID).Enabled = !task.Enabled; p.changed() })
+				p.pending = append(p.pending, func() { p.task(task.ID).Enabled = !task.Enabled; p.scheduleChanged() })
 			}
 			if ui.Button(c, p.tr("立即执行", "Run now")).Disabled(p.running[task.ID]).Clicked() {
 				p.pending = append(p.pending, func() { p.run(task.ID, time.Now(), false) })

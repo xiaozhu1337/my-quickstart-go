@@ -50,7 +50,7 @@ func (p *Panel) save() {
 		*p.tasks = append(*p.tasks, task)
 	}
 	p.editOpen, p.failure = false, ""
-	p.changed()
+	p.scheduleChanged()
 }
 
 func (p *Panel) dialogs(c *ui.Context) {
@@ -109,7 +109,7 @@ func (p *Panel) remove() {
 	for i, task := range *p.tasks {
 		if task.ID == p.removeID {
 			*p.tasks = append((*p.tasks)[:i], (*p.tasks)[i+1:]...)
-			p.changed()
+			p.scheduleChanged()
 			break
 		}
 	}

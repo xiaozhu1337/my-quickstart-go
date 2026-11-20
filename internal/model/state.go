@@ -89,7 +89,17 @@ func Default() State {
 
 func (s *State) Normalize() {
 	s.Version = 1
-	v := &s.Settings
+	s.Settings.Normalize()
+	if len(s.Groups) == 0 {
+		g := Default().Groups[0]
+		s.Groups = []Group{g}
+	}
+	if s.Group(s.ActiveGroupID) == nil {
+		s.ActiveGroupID = s.Groups[0].ID
+	}
+}
+
+func (v *Settings) Normalize() {
 	if v.Language != "zh-CN" && v.Language != "en" {
 		v.Language = DefaultLanguage
 	}
@@ -107,13 +117,6 @@ func (s *State) Normalize() {
 	v.CardIconScale = clamp(v.CardIconScale, 16, math.Round(min(v.CardWidth, v.CardHeight)*0.82), 56)
 	if strings.TrimSpace(v.FontFamily) == "" {
 		v.FontFamily = "system"
-	}
-	if len(s.Groups) == 0 {
-		g := Default().Groups[0]
-		s.Groups = []Group{g}
-	}
-	if s.Group(s.ActiveGroupID) == nil {
-		s.ActiveGroupID = s.Groups[0].ID
 	}
 }
 

@@ -135,7 +135,7 @@ func (a *App) appearanceSettings(c *ui.Context) {
 							a.report(err)
 						}
 					}
-					a.changed()
+					a.settingsChanged()
 				}
 			}
 		})
@@ -145,13 +145,13 @@ func (a *App) appearanceSettings(c *ui.Context) {
 			if ui.Select(c, &s.Language, []string{"zh-CN", "en"}).Label(a.text("语言", "Language")).Width(160).Changed() {
 				mygo.App.SetLanguages(s.Language)
 				a.rebuildTray()
-				a.changed()
+				a.settingsChanged()
 			}
 		})
 		a.settingRow(c, a.text("字体", "Font"), a.text("选择系统字体或输入字体名称。", "Choose a system font or enter a family name."), func() {
 			fonts := append([]string{"maye", "system", "segoe", "inter", "mono"}, a.fonts...)
 			if ui.Autocomplete(c, &s.FontFamily, fonts).Label(a.text("字体", "Font")).Width(160).Changed() {
-				a.changed()
+				a.settingsChanged()
 			}
 		})
 		a.settingNumber(c, a.text("界面字号", "UI font size"), &s.FontSize, 10, 22, 1)
@@ -164,11 +164,11 @@ func (a *App) layoutSettings(c *ui.Context) {
 		showLibrary, showSchedule := !s.HideLibraryTab, !s.HideScheduleTab
 		if a.settingSwitch(c, a.text("显示 MCP / Skills", "Show MCP / Skills"), a.text("隐藏后仍保留资源，可随时重新显示。", "Keep resources when hidden and show the page again at any time."), &showLibrary) {
 			s.HideLibraryTab = !showLibrary
-			a.changed()
+			a.settingsChanged()
 		}
 		if a.settingSwitch(c, a.text("显示定时任务", "Show scheduled tasks"), a.text("仅隐藏页面，已启用的定时任务仍在后台执行。", "Hide the page while enabled tasks continue running in the background."), &showSchedule) {
 			s.HideScheduleTab = !showSchedule
-			a.changed()
+			a.settingsChanged()
 		}
 	})
 	a.settingsSection(c, a.text("应用卡片", "Shortcut cards"), a.text("尺寸以设备无关像素计算。", "Sizes use device-independent pixels."), func() {
@@ -202,7 +202,7 @@ func (a *App) behaviorSettings(c *ui.Context) {
 		a.settingToggle(c, a.text("双击页面空白处隐藏窗口", "Double-click empty space to hide the window"), a.text("有托盘或全局快捷键时可隐藏窗口。", "Hiding requires a tray or a global shortcut."), &s.DblClickBlankToHide)
 		a.settingRow(c, a.text("隐藏后返回应用启动（秒）", "Return to launcher after hiding (seconds)"), a.text("在其他页面隐藏后开始计时；提前打开保留原页面。范围 1–3600 秒。", "Start counting when hidden on another page; reopen early to keep that page. Range: 1–3600 seconds."), func() {
 			if ui.NumberInput(c, &s.ReturnToLauncherSeconds, 1, 3600, 1).Label(a.text("自动返回等待秒数", "Return delay in seconds")).Width(160).Changed() {
-				a.changed()
+				a.settingsChanged()
 			}
 		})
 		if a.settingToggle(c, a.text("记住窗口位置和大小", "Remember window position and size"), a.text("下次启动恢复窗口的位置和尺寸。", "Restore the window bounds on the next launch."), &s.RememberWindowBounds) {
@@ -225,7 +225,7 @@ func (a *App) hotkeySettings(c *ui.Context) {
 					a.report(err)
 				} else {
 					a.state.Settings.ToggleHotkey = a.registeredHotkey
-					a.changed()
+					a.settingsChanged()
 					a.message = a.text("快捷键已更新", "Shortcut updated")
 				}
 			}
@@ -276,7 +276,7 @@ func (a *App) settingRow(c *ui.Context, label, hint string, control func()) {
 
 func (a *App) settingToggle(c *ui.Context, label, hint string, value *bool) bool {
 	if a.settingSwitch(c, label, hint, value) {
-		a.changed()
+		a.settingsChanged()
 		return true
 	}
 	return false
@@ -303,7 +303,7 @@ func (a *App) settingSwitch(c *ui.Context, label, hint string, value *bool) bool
 func (a *App) settingNumber(c *ui.Context, label string, value *float64, min, max, step float64) {
 	a.settingRow(c, label, "", func() {
 		if ui.NumberInput(c, value, min, max, step).Label(label).Width(160).Changed() {
-			a.changed()
+			a.settingsChanged()
 		}
 	})
 }

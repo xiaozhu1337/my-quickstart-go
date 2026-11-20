@@ -22,7 +22,7 @@ func (a *App) prepareStartup() {
 	var pending []<-chan struct{}
 	for _, e := range a.startupEntries(bounds.Width, bounds.Height) {
 		a.icon(e)
-		if done := a.iconLoading[e.Icon+"\x00"+e.Path]; done != nil {
+		if done := a.iconLoading[iconKey(e)]; done != nil {
 			pending = append(pending, done)
 		}
 	}

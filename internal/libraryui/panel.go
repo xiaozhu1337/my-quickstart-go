@@ -22,6 +22,9 @@ type Panel struct {
 	store                                     *library.Library
 	items                                     []library.Item
 	selected                                  map[string]bool
+	filtered                                  []int
+	filterValid                               bool
+	filterQuery, filterKind                   string
 	query, kind, project, agent               string
 	message, failure                          string
 	list                                      ui.ListState
@@ -38,10 +41,7 @@ type Panel struct {
 func New(root string) *Panel {
 	p := &Panel{selected: map[string]bool{}, agent: "codex", magpieSource: library.DefaultMagpiePath(), openFolder: platform.OpenFolder}
 	var err error
-	p.store, err = library.Open(root)
-	if err == nil {
-		p.items, err = p.store.Items()
-	}
+	p.store, p.items, err = library.OpenWithItems(root)
 	if err != nil {
 		p.store = nil
 		p.fail(err)
@@ -77,6 +77,7 @@ func (p *Panel) run(job func() (string, error), closeDialog bool) {
 				return
 			}
 			p.items = items
+			p.filterValid = false
 			p.message = message
 			valid := map[string]bool{}
 			for _, i := range items {
@@ -200,14 +201,14 @@ func (p *Panel) View(c *ui.Context) {
 			}
 		})
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, fmt.Sprintf(p.tr("已选择 %d 项", "%d selected"), len(p.ids()))).Grow(1)
+			ui.Text(c, fmt.Sprintf(p.tr("已选择 %d 项", "%d selected"), len(p.selected))).Grow(1)
 			if ui.Button(c, p.tr("取消选择", "Clear selection")).Disabled(p.Busy).Clicked() {
 				p.ClearSelection()
 			}
-			if ui.Button(c, p.tr("从库移除", "Remove from library")).Disabled(p.Busy || len(p.ids()) == 0).Clicked() {
+			if ui.Button(c, p.tr("从库移除", "Remove from library")).Disabled(p.Busy || len(p.selected) == 0).Clicked() {
 				p.removeOpen = true
 			}
-			if ui.PrimaryButton(c, p.tr("复制到项目", "Copy to project")).Disabled(p.Busy || len(p.ids()) == 0 || strings.TrimSpace(p.project) == "").Clicked() {
+			if ui.PrimaryButton(c, p.tr("复制到项目", "Copy to project")).Disabled(p.Busy || len(p.selected) == 0 || strings.TrimSpace(p.project) == "").Clicked() {
 				ids, project, agent := p.ids(), p.project, p.agent
 				format := p.tr("已复制 %d 个 MCP、%d 个 Skill 到 %s", "Copied %d MCPs and %d skills to %s")
 				backupLabel := p.tr("；原配置备份：", "; backup: ")
@@ -235,16 +236,7 @@ func (p *Panel) View(c *ui.Context) {
 }
 
 func (p *Panel) resourceList(c *ui.Context) {
-	var matches []library.Item
-	q := strings.ToLower(strings.TrimSpace(p.query))
-	for _, i := range p.items {
-		if (p.kind == "MCP" && i.Kind != "mcp") || (p.kind == "Skill" && i.Kind != "skill") {
-			continue
-		}
-		if strings.Contains(strings.ToLower(i.Name+" "+i.Description), q) {
-			matches = append(matches, i)
-		}
-	}
+	matches := p.filteredItems()
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, fmt.Sprintf(p.tr("共 %d 项", "%d resources"), len(matches))).TextColor(c.Theme().TextMuted).Grow(1)
 		ui.Text(c, p.tr("单击条目选择或取消，可多选", "Click rows to toggle selection; multiple selections allowed")).FontSize(11).TextColor(c.Theme().TextMuted)
@@ -252,18 +244,9 @@ func (p *Panel) resourceList(c *ui.Context) {
 	if len(matches) == 0 {
 		ui.Text(c, p.tr("暂无资源。添加 MCP 配置，或导入包含 SKILL.md 的目录。", "No resources. Add an MCP config or import a directory containing SKILL.md.")).TextColor(c.Theme().TextMuted).Padding(20, 0)
 	}
-	slices.SortStableFunc(matches, func(a, b library.Item) int {
-		if a.Pinned == b.Pinned {
-			return 0
-		}
-		if a.Pinned {
-			return -1
-		}
-		return 1
-	})
-	p.list.Key = func(n int) any { return matches[n].ID }
+	p.list.Key = func(n int) any { return p.items[matches[n]].ID }
 	ui.List(c, &p.list, len(matches), func(n int) {
-		i := matches[n]
+		i := p.items[matches[n]]
 		row := ui.Row(c.Key(i.ID)).Label(i.Name).Padding(10).Margin(0, 0, 8, 0).Gap(12).AlignItems(ui.Center).Background(c.Theme().Surface).Border(1, c.Theme().Accent.Alpha(0)).Radius(8).Disabled(p.Busy)
 		hovered := row.Hovered()
 		if p.selected[i.ID] {
@@ -276,7 +259,11 @@ func (p *Panel) resourceList(c *ui.Context) {
 			row.Background(c.Theme().SurfaceHover).Border(1, c.Theme().Accent.Alpha(0.25))
 		}
 		if row.Clicked() {
-			p.selected[i.ID] = !p.selected[i.ID]
+			if p.selected[i.ID] {
+				delete(p.selected, i.ID)
+			} else {
+				p.selected[i.ID] = true
+			}
 		}
 		row.Children(func() {
 			ui.Text(c, i.Name).SingleLine().Tooltip(i.Name).Width(180)
@@ -312,4 +299,31 @@ func (p *Panel) resourceList(c *ui.Context) {
 			}
 		})
 	}).Grow(1).Padding(0, 16, 0, 0)
+}
+
+func (p *Panel) filteredItems() []int {
+	if p.filterValid && p.filterQuery == p.query && p.filterKind == p.kind {
+		return p.filtered
+	}
+	q := strings.ToLower(strings.TrimSpace(p.query))
+	matches := p.filtered[:0]
+	for index, item := range p.items {
+		if p.kind == "MCP" && item.Kind != "mcp" || p.kind == "Skill" && item.Kind != "skill" {
+			continue
+		}
+		if q == "" || strings.Contains(strings.ToLower(item.Name+" "+item.Description), q) {
+			matches = append(matches, index)
+		}
+	}
+	slices.SortStableFunc(matches, func(a, b int) int {
+		if p.items[a].Pinned == p.items[b].Pinned {
+			return 0
+		}
+		if p.items[a].Pinned {
+			return -1
+		}
+		return 1
+	})
+	p.filtered, p.filterQuery, p.filterKind, p.filterValid = matches, p.query, p.kind, true
+	return matches
 }

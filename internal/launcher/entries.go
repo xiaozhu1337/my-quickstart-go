@@ -8,21 +8,35 @@ import (
 
 	"my-quickstart-go/internal/model"
 	"my-quickstart-go/internal/platform"
+	"my-quickstart-go/internal/store"
 )
 
 type entryDrag struct{ ID string }
 
 func (a *App) filter() {
-	a.results = a.results[:0]
-	a.matches = make(map[string]int, len(a.state.Groups))
+	if a.matches == nil {
+		a.matches = make(map[string]int, len(a.state.Groups))
+	} else {
+		clear(a.matches)
+	}
 	q := strings.ToLower(strings.TrimSpace(a.query))
+	if q != "" && a.searchNames == nil {
+		a.searchNames = make(map[string][]string, len(a.state.Groups))
+		for _, g := range a.state.Groups {
+			names := make([]string, len(g.Apps))
+			for i, e := range g.Apps {
+				names[i] = strings.ToLower(e.Name)
+			}
+			a.searchNames[g.ID] = names
+		}
+	}
 	firstMatch := ""
 	for _, g := range a.state.Groups {
 		if q == "" {
 			a.matches[g.ID] = len(g.Apps)
 		} else {
-			for _, e := range g.Apps {
-				if strings.Contains(strings.ToLower(e.Name), q) {
+			for _, name := range a.searchNames[g.ID] {
+				if strings.Contains(name, q) {
 					a.matches[g.ID]++
 				}
 			}
@@ -46,10 +60,19 @@ func (a *App) filter() {
 		a.browseGroupID = ""
 	}
 	a.filteredQuery = q
+	a.showGroup(q)
+}
+
+func (a *App) showGroup(q string) {
+	a.results = nil
 	if g := a.state.Group(a.state.ActiveGroupID); g != nil {
-		for _, e := range g.Apps {
-			if q == "" || strings.Contains(strings.ToLower(e.Name), q) {
-				a.results = append(a.results, e)
+		if q == "" {
+			a.results = g.Apps
+		} else {
+			for i, name := range a.searchNames[g.ID] {
+				if strings.Contains(name, q) {
+					a.results = append(a.results, g.Apps[i])
+				}
 			}
 		}
 	}
@@ -60,9 +83,13 @@ func (a *App) chooseGroup(id string) {
 	if a.state.Group(id) == nil || (strings.TrimSpace(a.query) != "" && a.matches[id] == 0) {
 		return
 	}
-	a.state.ActiveGroupID = id
 	a.selected = 0
-	a.changed()
+	if a.state.ActiveGroupID == id {
+		return
+	}
+	a.state.ActiveGroupID = id
+	a.showGroup(a.filteredQuery)
+	a.persist(store.ActiveGroup)
 }
 
 func (a *App) addGroup() {

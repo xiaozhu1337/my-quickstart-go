@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 	"my-quickstart-go/internal/model"
 )
 
@@ -178,4 +179,12 @@ func splitArgs(raw string) ([]string, error) {
 		args = append(args, word.String())
 	}
 	return args, nil
+}
+
+func shellBitmap(path string, size int) (*ui.Bitmap, error) {
+	data, err := fileIcon(path, size)
+	if err != nil {
+		return nil, err
+	}
+	return ui.DecodeBitmapScaled(data, size)
 }

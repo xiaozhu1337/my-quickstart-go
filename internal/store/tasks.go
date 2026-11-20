@@ -57,6 +57,64 @@ func loadTasks(tx *sql.Tx) ([]model.ScheduledTask, error) {
 }
 
 func saveTasks(tx *sql.Tx, tasks []model.ScheduledTask) error {
+	if err := ensureTaskColumns(tx); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM scheduled_tasks"); err != nil {
+		return err
+	}
+	return writeTaskChanges(tx, nil, tasks)
+}
+
+const taskInsert = `INSERT INTO scheduled_tasks
+ (id, name, daily_time, path, args, enabled, last_scheduled_date, last_run_at, last_status, last_error, position, python_path, command)
+ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+func writeTaskChanges(tx *sql.Tx, previous, tasks []model.ScheduledTask) error {
+	old := make(map[string]int, len(previous))
+	for i, t := range previous {
+		old[t.ID] = i
+	}
+	stmt, err := tx.Prepare(taskInsert + " ON CONFLICT(id) DO UPDATE SET " + taskUpdates)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for position, task := range tasks {
+		index, exists := old[task.ID]
+		delete(old, task.ID)
+		if exists && index == position && previous[index] == task {
+			continue
+		}
+		if err := task.Validate(); err != nil {
+			return err
+		}
+		if _, err := stmt.Exec(task.ID, task.Name, task.Time, task.Path, task.Args, task.Enabled,
+			task.LastScheduledDate, task.LastRunAt, task.LastStatus, task.LastError, position, task.PythonPath, task.Command); err != nil {
+			return err
+		}
+	}
+	for id := range old {
+		if _, err := tx.Exec("DELETE FROM scheduled_tasks WHERE id=?", id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+const taskUpdates = `name=excluded.name,daily_time=excluded.daily_time,path=excluded.path,args=excluded.args,enabled=excluded.enabled,last_scheduled_date=excluded.last_scheduled_date,last_run_at=excluded.last_run_at,last_status=excluded.last_status,last_error=excluded.last_error,position=excluded.position,python_path=excluded.python_path,command=excluded.command`
+
+func hasTaskPythonPath(tx *sql.Tx) (bool, error) {
+	return hasTaskColumn(tx, "python_path")
+}
+
+func hasTaskColumn(tx *sql.Tx, name string) (bool, error) {
+	var count int
+	err := tx.QueryRow("SELECT count(*) FROM pragma_table_info('scheduled_tasks') WHERE name = ?", name).Scan(&count)
+	return count != 0, err
+}
+
+func ensureTaskColumns(tx *sql.Tx) error {
 	if _, err := tx.Exec(taskSchema); err != nil {
 		return err
 	}
@@ -78,31 +136,5 @@ func saveTasks(tx *sql.Tx, tasks []model.ScheduledTask) error {
 			return err
 		}
 	}
-	if _, err := tx.Exec("DELETE FROM scheduled_tasks"); err != nil {
-		return err
-	}
-	stmt, err := tx.Prepare(`INSERT INTO scheduled_tasks
- (id, name, daily_time, path, args, enabled, last_scheduled_date, last_run_at, last_status, last_error, position, python_path, command)
- VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	for position, task := range tasks {
-		if _, err := stmt.Exec(task.ID, task.Name, task.Time, task.Path, task.Args, task.Enabled,
-			task.LastScheduledDate, task.LastRunAt, task.LastStatus, task.LastError, position, task.PythonPath, task.Command); err != nil {
-			return err
-		}
-	}
 	return nil
-}
-
-func hasTaskPythonPath(tx *sql.Tx) (bool, error) {
-	return hasTaskColumn(tx, "python_path")
-}
-
-func hasTaskColumn(tx *sql.Tx, name string) (bool, error) {
-	var count int
-	err := tx.QueryRow("SELECT count(*) FROM pragma_table_info('scheduled_tasks') WHERE name = ?", name).Scan(&count)
-	return count != 0, err
 }

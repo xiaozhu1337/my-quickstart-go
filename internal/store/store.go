@@ -48,12 +48,17 @@ func DefaultPath() (string, error) {
 
 // Open imports the old database only when the default new database does not exist.
 func Open(path string) (*Store, error) {
+	s, _, err := OpenWithState(path)
+	return s, err
+}
+
+func OpenWithState(path string) (*Store, model.State, error) {
 	if path == "" {
-		return nil, errors.New("database path is empty")
+		return nil, model.State{}, errors.New("database path is empty")
 	}
 	path, err := filepath.Abs(path)
 	if err != nil {
-		return nil, err
+		return nil, model.State{}, err
 	}
 	_, err = os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -62,42 +67,43 @@ func Open(path string) (*Store, error) {
 		if pathErr == nil {
 			defaultPath, pathErr = filepath.Abs(defaultPath)
 			if pathErr != nil {
-				return nil, pathErr
+				return nil, model.State{}, pathErr
 			}
 			if path == defaultPath || (runtime.GOOS == "windows" && strings.EqualFold(path, defaultPath)) {
 				legacyPaths, legacyErr := legacyDatabasePaths()
 				if legacyErr != nil {
-					return nil, legacyErr
+					return nil, model.State{}, legacyErr
 				}
 				for _, legacy := range legacyPaths {
 					if _, statErr := os.Stat(legacy); statErr == nil {
 						state, err = readLegacyState(legacy)
 						if err != nil {
-							return nil, fmt.Errorf("import legacy database %s: %w", legacy, err)
+							return nil, model.State{}, fmt.Errorf("import legacy database %s: %w", legacy, err)
 						}
 						break
 					} else if !errors.Is(statErr, os.ErrNotExist) {
-						return nil, statErr
+						return nil, model.State{}, statErr
 					}
 				}
 			}
 		}
 		if err = createDatabase(path, state); err != nil {
-			return nil, err
+			return nil, model.State{}, err
 		}
 	} else if err != nil {
-		return nil, err
+		return nil, model.State{}, err
 	}
 	db, err := connect(path, "rw")
 	if err != nil {
-		return nil, err
+		return nil, model.State{}, err
 	}
 	s := &Store{db: db, path: path}
-	if _, err = s.Load(); err != nil {
+	state, err := s.Load()
+	if err != nil {
 		db.Close()
-		return nil, fmt.Errorf("load database: %w", err)
+		return nil, model.State{}, fmt.Errorf("load database: %w", err)
 	}
-	return s, nil
+	return s, state, nil
 }
 
 func connect(path, mode string) (*sql.DB, error) {
@@ -278,9 +284,7 @@ func validate(state model.State) error {
 	if state.Group(state.ActiveGroupID) == nil {
 		return errors.New("active group does not exist")
 	}
-	// JSON encoding also rejects non-finite settings values before a transaction can change data.
-	_, err := json.Marshal(state)
-	return err
+	return nil
 }
 
 func (s *Store) Save(state model.State) error {
@@ -299,16 +303,8 @@ func (s *Store) Save(state model.State) error {
 	if _, err = tx.Exec(schema); err != nil {
 		return err
 	}
-	columns, err := appColumns(tx)
-	if err != nil {
+	if err := ensureAppColumns(tx); err != nil {
 		return err
-	}
-	for _, column := range []string{"env_vars", "icon"} {
-		if !columns[column] {
-			if _, err = tx.Exec("ALTER TABLE apps ADD COLUMN " + column + " TEXT NOT NULL DEFAULT ''"); err != nil {
-				return err
-			}
-		}
 	}
 	if _, err = tx.Exec("DELETE FROM apps; DELETE FROM groups"); err != nil {
 		return err
@@ -365,4 +361,19 @@ func createDatabase(path string, state model.State) (err error) {
 	s := &Store{db: db, path: path}
 	err = s.Save(state)
 	return errors.Join(err, s.Close())
+}
+
+func ensureAppColumns(tx *sql.Tx) error {
+	columns, err := appColumns(tx)
+	if err != nil {
+		return err
+	}
+	for _, column := range []string{"env_vars", "icon"} {
+		if !columns[column] {
+			if _, err = tx.Exec("ALTER TABLE apps ADD COLUMN " + column + " TEXT NOT NULL DEFAULT ''"); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

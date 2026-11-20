@@ -45,20 +45,25 @@ type Library struct {
 var safeName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`)
 
 func Open(root string) (*Library, error) {
+	l, _, err := OpenWithItems(root)
+	return l, err
+}
+
+func OpenWithItems(root string) (*Library, []Item, error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err = os.MkdirAll(root, 0700); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	root, err = filepath.EvalSymlinks(root)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	l := &Library{Root: root, copySkill: copySkillDirectory}
-	_, err = l.Items()
-	return l, err
+	items, err := l.Items()
+	return l, items, err
 }
 
 func (l *Library) Items() ([]Item, error) {

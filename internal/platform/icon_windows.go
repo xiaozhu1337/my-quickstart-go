@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/egoist/mygo/ui"
 	"image"
 	"image/png"
 	"runtime"
@@ -41,6 +42,26 @@ type iconDIBSection struct {
 
 // fileIcon can run on a worker without a MyGo application or UI message loop.
 func fileIcon(path string, size int) ([]byte, error) {
+	img, err := shellImage(path, size)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func shellBitmap(path string, size int) (*ui.Bitmap, error) {
+	img, err := shellImage(path, size)
+	if err != nil {
+		return nil, err
+	}
+	return ui.NewBitmap(img), nil
+}
+
+func shellImage(path string, size int) (*image.NRGBA, error) {
 	if size <= 0 || size > maxShellIconSize {
 		return nil, fmt.Errorf("icon size must be between 1 and %d", maxShellIconSize)
 	}
@@ -92,15 +113,7 @@ func fileIcon(path string, size int) ([]byte, error) {
 	if n, _, _ := getIconObject.Call(bitmap, unsafe.Sizeof(dib), uintptr(unsafe.Pointer(&dib))); n != unsafe.Sizeof(dib) {
 		return nil, errors.New("shell icon is not a DIB section")
 	}
-	img, err := iconDIBImage(&dib)
-	if err != nil {
-		return nil, err
-	}
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	return iconDIBImage(&dib)
 }
 
 func iconDIBImage(dib *iconDIBSection) (*image.NRGBA, error) {

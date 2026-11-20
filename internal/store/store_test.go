@@ -281,3 +281,30 @@ func TestSQLiteInvalidData(t *testing.T) {
 		})
 	}
 }
+
+func TestIncrementalSaveLeavesOtherRowsAlone(t *testing.T) {
+	db := openTestStore(t)
+	before := sampleState()
+	if err := db.Save(before); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.db.Exec("CREATE TRIGGER guard_delete BEFORE DELETE ON apps BEGIN SELECT RAISE(ABORT,'unexpected delete'); END; CREATE TRIGGER guard_update BEFORE UPDATE ON apps WHEN OLD.id='app-two' BEGIN SELECT RAISE(ABORT,'unexpected update'); END;"); err != nil {
+		t.Fatal(err)
+	}
+	after := sampleState()
+	after.ActiveGroupID = after.Groups[0].ID
+	if err := db.SaveChanges(before, after, ActiveGroup); err != nil {
+		t.Fatal(err)
+	}
+	next := sampleState()
+	next.ActiveGroupID = after.ActiveGroupID
+	next.Groups[0].Apps[0].Name = "renamed"
+	if err := db.SaveChanges(after, next, Groups); err != nil {
+		t.Fatal(err)
+	}
+	got, err := db.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertState(t, next, got)
+}

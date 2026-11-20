@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/egoist/mygo/ui"
 	"my-quickstart-go/internal/model"
 )
 
@@ -129,33 +130,53 @@ func uwpShellPath(path string) (string, error) {
 }
 
 // Icon accepts a custom image data URL, image file, file icon or UWP path.
-// Shell icon lookup requires MyGo's application to be running.
 func Icon(path string, size int) ([]byte, error) {
+	data, shell, err := iconSource(path, size)
+	if err != nil || shell == "" {
+		return data, err
+	}
+	return fileIcon(shell, size)
+}
+
+func IconBitmap(path string, size int) (*ui.Bitmap, error) {
+	data, shell, err := iconSource(path, size)
+	if err != nil {
+		return nil, err
+	}
+	if shell != "" {
+		return shellBitmap(shell, size)
+	}
+	return ui.DecodeBitmapScaled(data, size)
+}
+
+func iconSource(path string, size int) ([]byte, string, error) {
 	if size <= 0 {
-		return nil, errors.New("icon size must be positive")
+		return nil, "", errors.New("icon size must be positive")
 	}
 	if strings.HasPrefix(path, "data:image/") {
 		header, payload, ok := strings.Cut(path, ",")
 		if !ok {
-			return nil, errors.New("invalid image data URL")
+			return nil, "", errors.New("invalid image data URL")
 		}
 		if strings.HasSuffix(header, ";base64") {
-			return base64.StdEncoding.DecodeString(payload)
+			data, err := base64.StdEncoding.DecodeString(payload)
+			return data, "", err
 		}
 		decoded, err := url.PathUnescape(payload)
-		return []byte(decoded), err
+		return []byte(decoded), "", err
 	}
 	path = absolutePath(path)
 	if strings.HasPrefix(strings.ToLower(path), "uwp:") {
 		var err error
 		path, err = uwpShellPath(path)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	}
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".ico", ".svg":
-		return os.ReadFile(path)
+		data, err := os.ReadFile(path)
+		return data, "", err
 	}
-	return fileIcon(path, size)
+	return nil, path, nil
 }

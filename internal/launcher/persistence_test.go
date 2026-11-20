@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"my-quickstart-go/internal/model"
+	"my-quickstart-go/internal/store"
 )
 
 type memoryStore struct {
@@ -15,7 +16,7 @@ type memoryStore struct {
 }
 
 func (m *memoryStore) Path() string { return "memory" }
-func (m *memoryStore) Save(s model.State) error {
+func (m *memoryStore) SaveChanges(_ model.State, s model.State, _ store.Fields) error {
 	if m.fail {
 		return errors.New("write failed")
 	}

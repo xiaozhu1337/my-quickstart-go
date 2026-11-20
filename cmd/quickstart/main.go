@@ -45,17 +45,12 @@ func main() {
 			return
 		}
 	}
-	db, err := store.Open(path)
+	db, state, err := store.OpenWithState(path)
 	if err != nil {
 		startupError(err)
 		return
 	}
 	defer db.Close()
-	state, err := db.Load()
-	if err != nil {
-		startupError(err)
-		return
-	}
 	app := launcher.New(state, db)
 	app.SetLibrary(filepath.Join(filepath.Dir(db.Path()), "library"))
 	defer app.Close()

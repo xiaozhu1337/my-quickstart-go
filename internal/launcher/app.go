@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"container/list"
 	"errors"
 	"fmt"
 	"log"
@@ -14,6 +15,7 @@ import (
 	"my-quickstart-go/internal/model"
 	"my-quickstart-go/internal/platform"
 	"my-quickstart-go/internal/scheduleui"
+	"my-quickstart-go/internal/store"
 )
 
 type App struct {
@@ -27,6 +29,7 @@ type App struct {
 	query            string
 	searchOpen       bool
 	filteredQuery    string
+	searchNames      map[string][]string
 	browseGroupID    string
 	dragPreviewID    string
 	dragBeforeID     string
@@ -37,7 +40,9 @@ type App struct {
 	groups           ui.ListState
 	search           ui.Handle
 	sidebar          float32
-	icons            map[string]*ui.Bitmap
+	icons            map[string]*list.Element
+	iconOrder        list.List
+	iconBytes        int
 	iconLoading      map[string]chan struct{}
 	iconSlots        chan struct{}
 	warming          bool
@@ -77,11 +82,11 @@ func (a *App) SetLibrary(root string) { a.library = libraryui.New(root) }
 func New(state model.State, p persistence) *App {
 	state.Normalize()
 	a := &App{state: state, selected: 0, sidebar: float32(state.Settings.SidebarWidth),
-		icons: map[string]*ui.Bitmap{}, iconLoading: map[string]chan struct{}{}, iconSlots: make(chan struct{}, 4)}
+		icons: map[string]*list.Element{}, iconLoading: map[string]chan struct{}{}, iconSlots: make(chan struct{}, 4)}
 	if p != nil {
-		a.saver = newSaver(p)
+		a.saver = newSaver(p, state)
 	}
-	a.schedule = scheduleui.New(&a.state.Tasks, a.changed, func() error {
+	a.schedule = scheduleui.New(&a.state.Tasks, func() { a.persist(store.Tasks) }, func() error {
 		if a.saver != nil {
 			return a.saver.flush()
 		}
@@ -220,7 +225,7 @@ func (a *App) captureBounds() {
 		return
 	}
 	a.state.Settings.WindowBounds = &b
-	a.changed()
+	a.settingsChanged()
 }
 
 func (a *App) onClose(e *mygo.CloseEvent) {
@@ -280,10 +285,22 @@ func (a *App) Close() {
 func (a *App) changed() {
 	a.state.Normalize()
 	a.sidebar = float32(a.state.Settings.SidebarWidth)
+	a.searchNames = nil
 	a.filter()
+	a.pruneIcons()
+	a.persist(store.Groups | store.ActiveGroup)
+}
+
+func (a *App) persist(fields store.Fields) {
 	if a.saver != nil {
-		a.saver.set(a.state)
+		a.saver.update(a.state, fields)
 	}
+}
+
+func (a *App) settingsChanged() {
+	a.state.Settings.Normalize()
+	a.sidebar = float32(a.state.Settings.SidebarWidth)
+	a.persist(store.Settings)
 }
 func (a *App) deferAction(fn func()) { a.pending = append(a.pending, fn) }
 func (a *App) report(err error) {
@@ -345,13 +362,31 @@ func (a *App) launch(e model.Entry) {
 	}()
 }
 
+func iconKey(e model.Entry) string {
+	path := strings.TrimSpace(e.Path)
+	if len(path) >= 8 && strings.EqualFold(path[:8], "command:") {
+		return ""
+	}
+	if e.Icon != "" {
+		return e.Icon
+	}
+	return e.Path
+}
+
+type cachedIcon struct {
+	key    string
+	bitmap *ui.Bitmap
+	bytes  int
+}
+
 func (a *App) icon(e model.Entry) *ui.Bitmap {
-	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(e.Path)), "command:") {
+	key := iconKey(e)
+	if key == "" {
 		return nil
 	}
-	key := e.Icon + "\x00" + e.Path
-	if b, ok := a.icons[key]; ok {
-		return b
+	if cached := a.icons[key]; cached != nil {
+		a.iconOrder.MoveToFront(cached)
+		return cached.Value.(cachedIcon).bitmap
 	}
 	if a.iconLoading[key] != nil || a.window == nil {
 		return nil
@@ -360,24 +395,61 @@ func (a *App) icon(e model.Entry) *ui.Bitmap {
 	a.iconLoading[key] = done
 	go func() {
 		a.iconSlots <- struct{}{}
-		defer func() { <-a.iconSlots }()
-		path := e.Path
-		if e.Icon != "" {
-			path = e.Icon
-		}
-		data, err := platform.Icon(path, 128)
-		var b *ui.Bitmap
-		if err == nil {
-			b, err = ui.DecodeBitmap(data)
-		}
+		b, err := platform.IconBitmap(key, 128)
+		<-a.iconSlots
 		if err != nil {
 			log.Printf("icon %s: %v", e.Path, err)
 		}
 		a.window.Update(func() {
-			a.icons[key] = b
+			defer close(done)
+			if a.iconLoading[key] != done {
+				return
+			}
 			delete(a.iconLoading, key)
-			close(done)
+			a.cacheIcon(key, b)
 		})
 	}()
 	return nil
+}
+
+func (a *App) cacheIcon(key string, b *ui.Bitmap) {
+	size := len(key) + 128
+	if b != nil {
+		w, h := b.Size()
+		size += w * h * 4
+	}
+	a.icons[key] = a.iconOrder.PushFront(cachedIcon{key, b, size})
+	a.iconBytes += size
+	// Keep the newest item even if its data URL alone exceeds the budget.
+	for a.iconOrder.Len() > 1 && a.iconBytes > 32<<20 {
+		a.evictIcon(a.iconOrder.Back())
+	}
+}
+
+func (a *App) evictIcon(el *list.Element) {
+	item := a.iconOrder.Remove(el).(cachedIcon)
+	delete(a.icons, item.key)
+	a.iconBytes -= item.bytes
+}
+
+func (a *App) pruneIcons() {
+	if len(a.icons)+len(a.iconLoading) == 0 {
+		return
+	}
+	used := make(map[string]bool)
+	for _, g := range a.state.Groups {
+		for _, e := range g.Apps {
+			used[iconKey(e)] = true
+		}
+	}
+	for key, el := range a.icons {
+		if !used[key] {
+			a.evictIcon(el)
+		}
+	}
+	for key := range a.iconLoading {
+		if !used[key] {
+			delete(a.iconLoading, key)
+		}
+	}
 }
