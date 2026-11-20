@@ -58,9 +58,13 @@ func (p *Panel) startProbe(item library.Item) {
 			p.probeCancel = nil
 			p.probeResult, p.probeError = result, message
 		}
-		p.complete(finish)
+		if p.Window != nil {
+			p.Window.Update(finish)
+		} else {
+			finish()
+		}
 	}
-	if p.Dispatch != nil || p.Window != nil {
+	if p.Window != nil {
 		go work()
 	} else {
 		work()

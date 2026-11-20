@@ -65,7 +65,11 @@ func (p *Panel) importMagpie() {
 			log.Printf("magpie import: %s", strings.Join(report.Details, "; "))
 		}
 		finish := func() { p.importReport = &report }
-		p.complete(finish)
+		if p.Window != nil {
+			p.Window.Update(finish)
+		} else {
+			finish()
+		}
 		return "", err
 	}, false)
 }

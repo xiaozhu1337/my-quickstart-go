@@ -2,483 +2,143 @@ package launcher
 
 import (
 	"fmt"
-	"log"
-	"net/url"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"unicode/utf8"
 
-	"github.com/nsgo-dev/nsgo/base"
-	"github.com/nsgo-dev/nsgo/core"
-	nsw "github.com/nsgo-dev/nsgo/ui"
-
-	"my-quickstart-go/internal/branding"
-	"my-quickstart-go/internal/model"
-	w "my-quickstart-go/internal/nativeui"
+	"github.com/egoist/mygo/ui"
 	"my-quickstart-go/internal/platform"
 )
 
-type nativeRoute struct {
-	tab                                 int
-	settings, hideLibrary, hideSchedule bool
-	language, theme, font               string
-	fontSize                            float64
-}
-
-const (
-	dialogNone = iota
-	dialogLauncher
-	dialogLibrary
-	dialogSchedule
-)
-
-func (a *App) currentRoute() nativeRoute {
-	s := a.state.Settings
-	if a.mainTab == 1 && s.HideLibraryTab || a.mainTab == 2 && s.HideScheduleTab {
+func (a *App) view(c *ui.Context) {
+	t := palette(a.state.Settings.Theme)
+	t.FontSize = float32(a.state.Settings.FontSize)
+	t.Font = fontName(a.state.Settings.FontFamily)
+	c.SetTheme(t)
+	c.Root().Background(t.Background)
+	if a.mainTab == 1 && a.state.Settings.HideLibraryTab || a.mainTab == 2 && a.state.Settings.HideScheduleTab {
 		a.mainTab = 0
 	}
-	return nativeRoute{a.mainTab, a.settingsOpen, s.HideLibraryTab, s.HideScheduleTab, s.Language, s.Theme, s.FontFamily, s.FontSize}
-}
-
-func (a *App) currentDialog() int {
-	switch {
-	case a.settingsOpen:
-		return dialogNone
-	case a.mainTab == 0 && (a.editorOpen || a.renameOpen || a.addOpen):
-		return dialogLauncher
-	case a.mainTab == 1 && a.library != nil && a.library.ModalOpen():
-		return dialogLibrary
-	case a.mainTab == 2 && a.schedule.ModalOpen():
-		return dialogSchedule
-	default:
-		return dialogNone
-	}
-}
-
-func bump(signal *core.Signal[int]) { signal.Update(func(i int) int { return i + 1 }) }
-
-// syncNative publishes only changed values. Showing the window or finishing a
-// launch must preserve the mounted controls, their focus and scroll position.
-func (a *App) syncNative() {
-	n := a.native
-	route := a.currentRoute()
-	if a.library != nil {
-		a.library.Language = route.language
-	}
-	a.schedule.Language = route.language
-	n.route.Set(route)
-	n.dialog.Set(a.currentDialog())
-	n.message.Set(a.message)
-	n.search.Set(a.searchOpen)
-}
-
-func (a *App) nativePage(cx *core.Scope) core.Node {
-	n := a.native
-	a.syncNative()
-	page := w.Column(core.Dynamic(func(cx *core.Scope) core.Node {
-		route := n.route.Get()
-		if route.settings || a.launcherOnly() {
-			return nil
-		}
-		return a.nativeNav(w.Page{Scope: cx, Refresh: a.syncNative})
-	}), core.Dynamic(func(cx *core.Scope) core.Node {
-		route := n.route.Get()
-		v := w.Page{Scope: cx, Refresh: a.syncNative}
-		if !route.settings && route.tab == 0 {
-			return a.nativeLauncher(v)
-		}
-		n.content.Get()
-		v.Refresh = func() {
-			old := n.dialog.GetUntracked()
-			a.syncNative()
-			if n.route.GetUntracked() == route && old == n.dialog.GetUntracked() {
-				bump(n.content)
+	if a.mainTab == 0 && !a.settingsOpen && !a.editorOpen && !a.renameOpen && !a.addOpen {
+		c.OnShortcut(ui.Cmd, ui.KeyF, func() {
+			if a.searchOpen {
+				c.Resolve(a.search).SetTextSelection(0, utf8.RuneCountInString(a.query))
 			}
-		}
-		switch {
-		case route.settings:
-			return a.nativeSettings(v)
-		case route.tab == 1 && a.library != nil:
-			return a.library.Native(v)
-		case route.tab == 2:
-			return a.schedule.Native(v)
-		default:
-			return a.nativeLauncher(v)
-		}
-	}), core.Dynamic(func(cx *core.Scope) core.Node {
-		if msg := n.message.Get(); msg != "" {
-			v := w.Page{Scope: cx, Refresh: a.syncNative}
-			return w.Row(w.Text(msg), v.Button(a.text("清除提示", "Dismiss"), func() { a.message = "" }))
-		}
-		return nil
-	}), core.Dynamic(a.dialogLayer))
-	page.Style.Padding, page.Style.Gap = core.All(14), 12
-	page.StyleFunc = func() core.Style {
-		s := n.route.Get()
-		return core.Style{Background: cx.Palette().Background, FontFamily: fontName(s.font), FontSize: core.Points(s.fontSize)}
-	}
-	return page
-}
-
-func (a *App) dialogLayer(cx *core.Scope) core.Node {
-	n := a.native
-	kind := n.dialog.Get()
-	if kind == dialogNone {
-		return nil
-	}
-	body := core.Dynamic(func(cx *core.Scope) core.Node {
-		n.dialogContent.Get()
-		v := w.Page{Scope: cx, Refresh: func() {
-			a.syncNative()
-			if kind == n.dialog.GetUntracked() {
-				bump(n.dialogContent)
-			}
-		}}
-		switch kind {
-		case dialogLibrary:
-			return a.library.NativeDialog(v)
-		case dialogSchedule:
-			return a.schedule.NativeDialog(v)
-		default:
-			return a.nativeDialog(v)
-		}
-	})
-	return base.Dialog{DefaultOpen: true, NoCloseOnEscape: true, NoCloseOnBackdropPress: true,
-		BackdropStyle: core.Style{Background: core.RGBA(0, 0.28)},
-		PopupStyleFunc: func() core.Style {
-			size := cx.Env().Window()
-			return core.Style{Width: core.Pt(min(620, size.Width-40)), MaxHeight: core.Pt(size.Height - 40),
-				Padding: core.All(18), Background: cx.Palette().Surface, BorderColor: cx.Palette().Border, BorderWidth: 1, CornerRadius: 10}
-		}, Children: []core.Node{body}}
-}
-
-func (a *App) nativeNav(v w.Page) core.Node {
-	cx := v.Scope
-	s := a.state.Settings
-	var nav []core.Node
-	labels := []string{a.text("应用启动", "Launcher"), "MCP / Skills", a.text("定时任务", "Scheduled tasks")}
-	for i, label := range labels {
-		if i == 1 && s.HideLibraryTab || i == 2 && s.HideScheduleTab {
-			continue
-		}
-		variant := nsw.ButtonGhost
-		if a.mainTab == i {
-			variant = nsw.ButtonPrimary
-		}
-		nav = append(nav, nsw.Button{Text: label, Variant: variant, OnPress: v.Action(func() { a.mainTab = i; a.settingsOpen = false })})
-	}
-	tabs := w.Row(nav...)
-	if cx.Env().Window().Width >= 680 {
-		mark := core.Image{Source: core.ImageSource{Data: branding.PNG}, ResizeMode: core.Contain, Style: core.Style{Width: core.Pt(26), Height: core.Pt(26), Margin: core.Edges{Right: 6}}}
-		tabs.Children = append([]core.Node{mark}, tabs.Children...)
-	}
-	header := w.Spread(tabs, v.Button(a.text("设置", "Settings"), a.openSettings))
-	header.Style.Padding = core.Edges{Bottom: 10}
-	header.Style.Borders = core.Edges{Bottom: 1}
-	header.Style.BorderColor = cx.Palette().Border
-	return header
-}
-
-func (a *App) nativeLauncher(v w.Page) core.Node {
-	t := a.text
-	cx := v.Scope
-	q := core.NewSignal(cx, a.query)
-	search := v.Action(func() {
-		if a.currentDialog() == dialogNone {
 			a.searchOpen = true
-		}
-	})
-	cx.OnKey("mod+f", search)
-	cx.OnKey("escape", v.Action(func() {
-		if a.searchOpen && a.currentDialog() == dialogNone {
-			a.searchOpen = false
+			a.search.Focus(c)
+		})
+		c.OnShortcut(0, ui.KeyEscape, func() {
 			a.query = ""
+			a.searchOpen = false
 			a.filter()
-			q.Set("")
-		}
-	}))
-	run := func() {
-		if len(a.results) > 0 && a.currentDialog() == dialogNone {
-			a.launch(a.results[a.selected])
-		}
-	}
-	cx.OnKey("enter", run)
-	cx.OnKey("space", run)
-	var nodes []core.Node
-	nodes = append(nodes, core.Show{When: a.native.search.Get, Then: func(*core.Scope) core.Node {
-		return nsw.Input{TestID: "launcher-search", Label: t("搜索", "Search"), Placeholder: t("搜索所有分类…", "Search all groups…"), AutoFocus: true, DefaultValue: a.query, OnChange: func(s string) { a.query = s; a.filter(); q.Set(s) }, OnSubmit: func(string) { run() }}
-	}})
-	nodes = append(nodes, core.Dynamic(func(area *core.Scope) core.Node {
-		q.Get()
-		a.native.groups.Get()
-		return a.nativeGroups(w.Page{Scope: area, Refresh: v.Refresh})
-	}))
-	return w.Column(nodes...)
-}
-
-type dropTarget struct {
-	ref           *core.Ref
-	group, before string
-	index         int
-}
-
-func (a *App) nativeGroups(v w.Page) core.Node {
-	cx := v.Scope
-	t := a.text
-	s := a.state.Settings
-	targets := map[string]dropTarget{}
-	preview := core.NewSignal(cx, "")
-	gridRef, listRef := new(core.Ref), new(core.Ref)
-	selected := core.NewSignal(cx, a.selected)
-	var groups []core.Node
-	for _, g := range a.state.Groups {
-		disabled := strings.TrimSpace(a.query) != "" && a.matches[g.ID] == 0
-		label := fmt.Sprintf("%s (%d)", g.Name, a.matches[g.ID])
-		ref := new(core.Ref)
-		first := ""
-		if len(g.Apps) > 0 {
-			first = g.Apps[0].ID
-		}
-		targets["group-"+g.ID] = dropTarget{ref: ref, group: g.ID, before: first, index: -1}
-		group := core.View{Ref: ref, Label: label, Role: core.RoleButton, Disabled: func() bool { return disabled }, Style: core.Style{Padding: core.All(7)}, Children: []core.Node{w.Text(label)}, OnPress: func(core.PressEvent) { a.chooseGroup(g.ID) }, OnFileDrop: a.nativeDrop(g.ID, ""),
-			OnContextMenu: func(e core.ContextMenuEvent) {
-				cx.PopupMenu([]core.MenuItem{
-					{Label: t("重命名分类", "Rename group"), OnSelect: v.Action(func() { a.renameID = g.ID; a.renameText = g.Name; a.renameOpen = true })},
-					{Label: t("移除分类", "Remove group"), Disabled: len(a.state.Groups) == 1, OnSelect: func() { a.removeGroup(g.ID) }},
-				}, e.PagePosition, nil)
-			}}
-		if g.ID == a.state.ActiveGroupID {
-			group.Style.Background = cx.Palette().SurfacePressed
-			group.Style.Color = cx.Palette().Accent
-			group.Style.FontWeight = core.FontWeightSemibold
-		}
-		if disabled {
-			group.Style.Color = cx.Palette().TextMuted
-		}
-		group.StyleFunc = func() core.Style {
-			if preview.Get() == "group-"+g.ID {
-				return core.Style{BorderWidth: 2, BorderColor: cx.Palette().Accent}
-			}
-			return core.Style{}
-		}
-		group.Style.CornerRadius = 6
-		groups = append(groups, group)
-	}
-	sidebar := v.Panel(w.Heading(t("分类", "Groups")), core.Scroll{Style: core.Style{FlexGrow: 1}, Children: groups}, v.Button(t("新建分类", "New group"), a.addGroup))
-	sidebar.Style.Padding = core.All(8)
-	if a.launcherOnly() {
-		sidebar.Children = append(sidebar.Children, v.Button(t("设置", "Settings"), a.openSettings))
-	}
-	sidebar.OnContextMenu = func(e core.ContextMenuEvent) {
-		cx.PopupMenu([]core.MenuItem{{Label: t("添加分类", "Add group"), OnSelect: a.addGroup}}, e.PagePosition, nil)
-	}
-	sidebar.Style.FlexGrow = 0
-	sidebar.Style.Width = core.Pt(core.Points(s.SidebarWidth))
-	divider := core.View{Style: core.Style{Width: core.Pt(5), Background: cx.Palette().Background}, OnPan: func(e core.PanEvent) {
-		if e.Phase == core.GestureEnded {
-			a.state.Settings.SidebarWidth = s.SidebarWidth + float64(e.Translation.X)
-			a.changed()
-		}
-	}}
-	columns := max(1, int((float64(cx.Env().Window().Width)-s.SidebarWidth-77)/(s.CardWidth+6)))
-	for key, step := range map[string]int{"left": -1, "right": 1, "up": -columns, "down": columns} {
-		cx.OnKey(key, func() {
-			if len(a.results) == 0 || a.currentDialog() != dialogNone {
-				return
-			}
-			a.selected = max(0, min(len(a.results)-1, a.selected+step))
-			selected.Set(a.selected)
-			listRef.ScrollToIndexAt(a.selected, 0.5, 0, false)
 		})
 	}
-	entries := append([]model.Entry(nil), a.results...)
-	active := a.state.ActiveGroupID
-	cards := w.List(len(entries), columns, core.Points(s.CardHeight), func(i int) any { return entries[i].ID }, func(i int) core.Node {
-		e := entries[i]
-		ref := new(core.Ref)
-		targets[e.ID] = dropTarget{ref: ref, group: active, before: e.ID, index: i}
-		cx.Cleanup(func() {
-			if targets[e.ID].ref == ref {
-				delete(targets, e.ID)
-			}
-		})
-		card := core.View{Ref: ref, Role: core.RoleButton, Label: e.Name, Style: core.Style{Width: core.Pt(core.Points(s.CardWidth)), Height: core.Pt(core.Points(s.CardHeight)), AlignItems: core.AlignCenter, JustifyContent: core.JustifyCenter, Background: cx.Palette().Surface, BorderWidth: 1, BorderColor: cx.Palette().Border, CornerRadius: 8},
-			Children: []core.Node{a.nativeIcon(cx, e), core.Text{Content: e.Name, MaxLines: 1, Style: core.Style{FontSize: core.Points(s.CardFontSize)}}},
-			OnPress:  func(core.PressEvent) { a.selected = i; selected.Set(i); a.launch(e) }, OnFileDrop: a.nativeDrop(active, e.ID),
-			OnContextMenu: func(ev core.ContextMenuEvent) {
-				cx.PopupMenu([]core.MenuItem{
-					{Label: t("打开", "Open"), OnSelect: func() { a.launch(e) }}, {Label: t("打开所在文件夹", "Open containing folder"), OnSelect: func() { go func() { err := platform.OpenFolder(e.Path); a.post(func() { a.report(err) }) }() }},
-					{Label: t("编辑", "Edit"), OnSelect: v.Action(func() { a.openEditor(e) })}, {Label: t("移除", "Remove"), OnSelect: func() { a.removeEntry(e.ID) }},
-				}, ev.PagePosition, nil)
-			}}
-		hover := core.NewSignal(cx, false)
-		card.OnMouseEnter = func(core.MouseEvent) { hover.Set(true) }
-		card.OnMouseLeave = func(core.MouseEvent) { hover.Set(false) }
-		card.StyleFunc = func() core.Style {
-			style := core.Style{}
-			if hover.Get() {
-				style.Background = cx.Palette().SurfaceHover
-			}
-			if selected.Get() == i {
-				style.BorderColor = cx.Palette().Focus
-			}
-			if preview.Get() == e.ID {
-				style.BorderWidth = 2
-				style.BorderColor = cx.Palette().Accent
-			}
-			return style
+	ui.Column(c).Fill().Children(func() {
+		a.mainTabsView(c)
+		if a.library != nil {
+			a.library.Language = a.state.Settings.Language
 		}
-		if strings.TrimSpace(a.query) == "" {
-			var start core.Point
-			card.OnPressDown = func(ev core.PressEvent) { start = ev.PagePosition }
-			card.OnPan = func(ev core.PanEvent) {
-				if ev.Phase == core.GestureCancelled {
-					preview.Set("")
-					return
-				}
-				at := core.Point{X: start.X + ev.Translation.X, Y: start.Y + ev.Translation.Y}
-				dst, cue, ok := cardDestination(at, gridRef, targets, entries, active)
-				if ev.Phase == core.GestureEnded {
-					preview.Set("")
-					if ok {
-						a.moveEntry(e.ID, dst.group, dst.before)
-					}
-				} else {
-					preview.Set(cue)
-				}
+		if a.settingsOpen {
+			a.settingsView(c)
+		} else if a.mainTab == 2 {
+			a.schedule.Language = a.state.Settings.Language
+			ui.Column(c).Grow(1).FillWidth().Children(func() {
+				a.schedule.View(c)
+				a.statusView(c)
+			})
+		} else if a.mainTab == 1 {
+			if a.library != nil {
+				a.library.Language = a.state.Settings.Language
+				a.library.View(c)
+			} else {
+				ui.Text(c, a.text("资源库尚未初始化", "Library is not initialized"))
 			}
-		}
-		return card
-	})
-	cards.Ref = listRef
-	cards.Empty = w.Text(t("拖入文件，或使用上方按钮添加快捷方式。", "Drop files here or add a shortcut using the buttons above."))
-	if strings.TrimSpace(a.query) != "" {
-		cards.Empty = w.Text(t("没有找到匹配的条目", "No matching shortcuts"))
-	}
-	groupName := ""
-	if g := a.state.Group(active); g != nil {
-		groupName = g.Name
-	}
-	header := w.Spread(w.Heading(groupName), v.Button(t("搜索", "Search"), func() { a.searchOpen = true }))
-	tools := w.Row(v.Primary(t("添加文件", "Add files"), func() { a.nativePick(v, false) }), v.Button(t("添加目录", "Add folder"), func() { a.nativePick(v, true) }), v.Button(t("添加命令", "Add command"), a.newCommand), v.Button(a.installedAppsTitle(), a.openAddApps))
-	grid := w.Column(cards)
-	if len(entries) == 0 {
-		grid.Children = []core.Node{cards.Empty}
-		grid.Style.AlignItems = core.AlignCenter
-		grid.Style.JustifyContent = core.JustifyCenter
-		grid.Style.Color = cx.Palette().TextMuted
-	}
-	grid.Style.Borders = core.Edges{Top: 1}
-	grid.Style.BorderColor = cx.Palette().Border
-	grid.Style.Padding = core.Edges{Top: 12}
-	grid.Ref = gridRef
-	grid.OnContextMenu = func(ev core.ContextMenuEvent) {
-		cx.PopupMenu([]core.MenuItem{
-			{Label: t("添加文件", "Add files"), OnSelect: func() { a.nativePick(v, false) }},
-			{Label: t("添加目录", "Add folder"), OnSelect: func() { a.nativePick(v, true) }},
-			{Label: t("添加命令", "Add command"), OnSelect: v.Action(a.newCommand)},
-			{Label: a.installedAppsTitle(), OnSelect: v.Action(a.openAddApps)},
-		}, ev.PagePosition, nil)
-	}
-	grid.StyleFunc = func() core.Style {
-		if preview.Get() == "$end" {
-			return core.Style{BorderWidth: 1, BorderColor: cx.Palette().Accent}
-		}
-		return core.Style{}
-	}
-	grid.OnFileDrop = a.nativeDrop(active, "$end")
-	grid.OnPress = func(ev core.PressEvent) {
-		if ev.Clicks == 2 && s.DblClickBlankToHide {
-			a.hide()
-		}
-	}
-	content := v.Panel(header, tools, grid)
-	content.Style.FlexGrow = 1
-	content.Style.FlexBasis = core.Pt(0)
-	content.Style.FlexShrink = 1
-	return core.View{Style: core.Style{Direction: core.Row, FlexGrow: 1, Gap: 3}, Children: []core.Node{sidebar, divider, content}}
-}
-
-func (a *App) nativeIcon(cx *core.Scope, e model.Entry) core.Node {
-	size := core.Points(a.state.Settings.CardIconScale * 0.72)
-	initial, _ := utf8.DecodeRuneInString(e.Name)
-	fallback := core.Text{Content: strings.ToUpper(string(initial)), Style: core.Style{FontSize: size * 0.6, Color: cx.Palette().Accent}}
-	if strings.HasPrefix(strings.ToLower(e.Path), "command:") {
-		return fallback
-	}
-	path := e.Icon
-	if path == "" {
-		path = e.Path
-	}
-	cached := a.native.icons[path]
-	if cached == nil {
-		surface := a.native.surface
-		cached = core.NewSignalFunc[[]byte](surface, nil, nil)
-		a.native.icons[path] = cached
-		go func() {
-			a.iconSlots <- struct{}{}
-			data, err := platform.Icon(path, 128)
-			<-a.iconSlots
-			if err != nil {
-				log.Printf("icon %s: %v", path, err)
-				return
-			}
-			surface.Post(func() { cached.Set(data) })
-		}()
-	}
-	return core.Dynamic(func(*core.Scope) core.Node {
-		data := cached.Get()
-		if len(data) == 0 {
-			return fallback
-		}
-		return core.Image{Source: core.ImageSource{Data: data}, ResizeMode: core.Contain, Style: core.Style{Width: core.Pt(size), Height: core.Pt(size)}}
-	})
-}
-
-func (a *App) nativeDrop(group, before string) func([]string) {
-	return func(raw []string) {
-		var paths []string
-		for _, s := range raw {
-			path, err := droppedPath(s)
-			if err != nil {
-				a.report(err)
-				continue
-			}
-			paths = append(paths, path)
-		}
-		a.importPaths(paths, group, before)
-	}
-}
-
-// droppedPath accepts desktop file URLs for both files and directories.
-func droppedPath(raw string) (string, error) {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return "", err
-	}
-	if u.Scheme != "file" || u.User != nil || u.Opaque != "" || u.RawQuery != "" || u.Fragment != "" {
-		return "", fmt.Errorf("invalid file URL %q", raw)
-	}
-	path := u.Path
-	if runtime.GOOS == "windows" {
-		if u.Host != "" && !strings.EqualFold(u.Host, "localhost") {
-			path = "//" + u.Host + path
 		} else {
-			path = strings.TrimPrefix(path, "/")
+			ui.Column(c).Grow(1).FillWidth().Children(func() {
+				if a.searchOpen {
+					ui.Row(c).Padding(18, 20).Children(func() {
+						input := ui.TextInput(c.Key("search"), &a.query).Bind(&a.search).Placeholder(a.text("搜索所有分类…", "Search all groups…")).Label(a.text("搜索", "Search")).Grow(1).Height(38)
+						if input.Changed() {
+							a.filter()
+						}
+						if input.Submitted() && a.selected >= 0 && a.selected < len(a.results) {
+							e := a.results[a.selected]
+							a.deferAction(func() { a.launch(e) })
+						}
+					})
+					ui.Divider(c)
+				}
+				if ui.Split(c, &a.sidebar, func() { a.sidebarView(c) }, func() {
+					ui.Column(c).Fill().Children(func() {
+						if strings.TrimSpace(a.query) != "" {
+							ui.Text(c, fmt.Sprintf(a.text("搜索结果（%d）", "Search results (%d)"), len(a.results))).FontSize(11).TextColor(t.TextMuted).Padding(12, 20, 0, 20)
+						}
+						a.gridView(c)
+					})
+				}).Grow(1).Changed() {
+					a.state.Settings.SidebarWidth = float64(a.sidebar)
+					a.changed()
+				}
+				a.statusView(c)
+			})
 		}
-	} else if u.Host != "" && !strings.EqualFold(u.Host, "localhost") {
-		return "", fmt.Errorf("unsupported file host %q", u.Host)
+	})
+
+	a.editorView(c)
+	a.renameView(c)
+	a.addAppsView(c)
+	actions := a.pending
+	a.pending = nil
+	for _, fn := range actions {
+		fn()
 	}
-	path = filepath.FromSlash(path)
-	if !filepath.IsAbs(path) {
-		return "", fmt.Errorf("expected absolute file path in %q", raw)
-	}
-	return path, nil
 }
 
 func (a *App) launcherOnly() bool {
 	return a.state.Settings.HideLibraryTab && a.state.Settings.HideScheduleTab
+}
+
+func (a *App) mainTabsView(c *ui.Context) {
+	if a.launcherOnly() {
+		return
+	}
+	labels := []string{a.text("应用启动", "Launcher")}
+	ids := []int{0}
+	if !a.state.Settings.HideLibraryTab {
+		labels, ids = append(labels, "MCP / Skills"), append(ids, 1)
+	}
+	if !a.state.Settings.HideScheduleTab {
+		labels, ids = append(labels, a.text("定时任务", "Scheduled tasks")), append(ids, 2)
+	}
+	selected := 0
+	for i, id := range ids {
+		if id == a.mainTab {
+			selected = i
+		}
+	}
+	ui.Row(c).Label(a.text("主导航", "Main navigation")).FillWidth().AlignItems(ui.Center).Children(func() {
+		disabled := a.editorOpen || a.renameOpen || a.addOpen || (a.mainTab == 2 && a.schedule.ModalOpen())
+		if a.settingsOpen {
+			for i, label := range labels {
+				button := ui.ButtonBase(c.Key("settings-return-"+label)).Padding(10, 12).Label(label).Disabled(disabled)
+				button.Children(func() { ui.Text(c, label).TextColor(c.Theme().TextMuted) })
+				if button.Clicked() {
+					a.mainTab, a.settingsOpen = ids[i], false
+				}
+			}
+		} else if ui.Tabs(c, &selected, labels...).Disabled(disabled).Changed() {
+			a.mainTab, a.settingsOpen = ids[selected], false
+		}
+		ui.Box(c).Grow(1)
+		button := ui.Button(c, a.text("设置", "Settings")).Margin(0, 12).Disabled(disabled)
+		if a.settingsOpen {
+			button.Background(c.Theme().Accent.Alpha(0.14))
+		}
+		if button.Clicked() {
+			a.openSettings()
+		}
+	})
+	ui.Divider(c)
 }
 
 func fontName(name string) string {
@@ -505,4 +165,194 @@ func fontName(name string) string {
 		}
 	}
 	return name
+}
+
+func (a *App) sidebarView(c *ui.Context) {
+	side := ui.Column(c).Fill().Padding(10).Gap(8).Background(c.Theme().Surface.Alpha(0.5))
+	side.ContextMenu(func(m *ui.Menu) {
+		if m.Item(a.text("添加分类", "Add group")).Chosen() {
+			a.deferAction(a.addGroup)
+		}
+	})
+	side.Children(func() {
+		a.groups.Key = func(i int) any { return a.state.Groups[i].ID }
+		ui.List(c, &a.groups, len(a.state.Groups), func(i int) {
+			g := a.state.Groups[i]
+			row := ui.ButtonBase(c.Key(g.ID)).Label(g.Name).Tooltip(g.Name).WidthPercent(100).Height(40).Padding(10).Radius(8)
+			noMatches := strings.TrimSpace(a.query) != "" && a.matches[g.ID] == 0
+			row.Disabled(noMatches)
+			active := g.ID == a.state.ActiveGroupID && !noMatches
+			accent := c.Theme().Accent
+			if noMatches {
+				gray := uint8(96)
+				if c.Theme().Dark {
+					gray = 144
+				}
+				accent = ui.RGB(gray, gray, gray)
+			}
+			if active {
+				row.Background(accent.Alpha(0.14)).Border(1, accent.Alpha(0.25))
+			} else if row.Hovered() {
+				row.Background(c.Theme().SurfaceHover)
+			}
+			row.Children(func() {
+				ui.Row(c).Fill().Gap(6).Children(func() {
+					color := c.Theme().Text
+					countColor := c.Theme().TextMuted
+					if noMatches {
+						color, countColor = accent, accent
+					}
+					ui.Text(c, g.Name).SingleLine().TextColor(color).Grow(1)
+					ui.Text(c, fmt.Sprint(a.matches[g.ID])).FontSize(10).TextColor(countColor)
+				})
+			})
+			if row.Clicked() {
+				a.deferAction(func() { a.chooseGroup(g.ID) })
+			}
+			row.ContextMenu(func(m *ui.Menu) {
+				if m.Item(a.text("重命名", "Rename")).Chosen() {
+					a.renameID = g.ID
+					a.renameText = g.Name
+					a.renameOpen = true
+				}
+				if m.Item(a.text("移除分类", "Remove group")).Disabled(len(a.state.Groups) <= 1).Chosen() {
+					a.deferAction(func() { a.removeGroup(g.ID) })
+				}
+			})
+			if over, ok := ui.DragOver[entryDrag](row); ok && over.ID != "" {
+				row.Border(2, c.Theme().Accent)
+			}
+			if drag, ok := ui.Drop[entryDrag](row); ok {
+				before := ""
+				if len(g.Apps) > 0 {
+					before = g.Apps[0].ID
+				}
+				a.deferAction(func() { a.moveEntry(drag.ID, g.ID, before) })
+			}
+			if row.FileDragOver() {
+				row.Border(2, c.Theme().Accent)
+			}
+			if paths := row.DroppedFiles(); len(paths) > 0 {
+				a.importPaths(paths, g.ID, "")
+			}
+		}).Grow(1)
+		if a.launcherOnly() {
+			ui.Divider(c)
+			if ui.Button(c, a.text("设置", "Settings")).FillWidth().Height(36).Disabled(a.editorOpen || a.renameOpen || a.addOpen).Clicked() {
+				a.openSettings()
+			}
+		}
+	})
+}
+
+func (a *App) gridView(c *ui.Context) {
+	a.grid.Key = func(i int) any { return a.results[i].ID }
+	a.grid.Label = func(i int) string { return a.results[i].Name }
+	a.grid.Selected = &a.selected
+	if len(a.results) == 0 {
+		ui.Column(c).AlignItems(ui.Center).Gap(8).Padding(30, 16).Children(func() {
+			title, hint := a.text("从一个快捷方式开始", "Your shortcuts belong here"), a.text("右键空白处添加，或将文件拖入下方区域。", "Right-click the empty space to add, or drop files below.")
+			if strings.TrimSpace(a.query) != "" {
+				title, hint = a.text("没有找到匹配的条目", "No matching shortcuts"), a.text("试试其他名称，或清空搜索查看分类。", "Try another name or clear the search to browse groups.")
+			}
+			ui.Text(c, title).FontSize(17).Bold()
+			ui.Text(c, hint).TextColor(c.Theme().TextMuted)
+		})
+	}
+	var slots []dragSlot
+	// shortcut: GridView has no cell style hook; use a clear theme until MyGo exposes one.
+	theme := c.Theme()
+	gridTheme := *theme
+	gridTheme.Accent, gridTheme.Border = ui.Color{}, ui.Color{}
+	gridTheme.SurfacePressed, gridTheme.SurfaceHover = ui.Color{}, ui.Color{}
+	c.SetTheme(&gridTheme)
+	grid := ui.GridView(c, &a.grid, len(a.results), float32(a.state.Settings.CardWidth), float32(a.state.Settings.CardHeight), func(i int) {
+		c.SetTheme(theme)
+		slots = append(slots, a.card(c, i))
+		c.SetTheme(&gridTheme)
+	}).Grow(1).Padding(12, 20, 20, 20).Gap(10)
+	c.SetTheme(theme)
+	grid.ContextMenu(a.addMenu)
+	if grid.Submitted() && a.selected < len(a.results) {
+		e := a.results[a.selected]
+		a.deferAction(func() { a.launch(e) })
+	}
+	if grid.DoubleClicked() && a.state.Settings.DblClickBlankToHide {
+		a.deferAction(a.hide)
+	}
+	if strings.TrimSpace(a.query) == "" {
+		a.previewReorder(c, grid, slots)
+	}
+	if paths := grid.DroppedFiles(); len(paths) > 0 {
+		a.importPaths(paths, a.state.ActiveGroupID, "$end")
+	}
+}
+
+func (a *App) card(c *ui.Context, i int) dragSlot {
+	e := a.results[i]
+	slot := ui.Box(c).FillWidth().Height(float32(a.state.Settings.CardHeight))
+	var card ui.Element
+	slot.Children(func() {
+		card = ui.ButtonBase(c.Key(e.ID)).Label(e.Name).Tooltip(e.Name).Size(float32(a.state.Settings.CardWidth), float32(a.state.Settings.CardHeight)).Radius(10).Padding(6).Background(c.Theme().Surface).Border(1, c.Theme().Border.Alpha(0.6))
+		if i == a.selected && c.Resolve(a.grid.Handle).FocusVisible() {
+			card.Border(1, c.Theme().Accent.Alpha(0.65))
+		}
+		if strings.TrimSpace(a.query) == "" {
+			card.Drag(entryDrag{e.ID})
+		}
+		if card.Hovered() {
+			card.Background(c.Theme().SurfaceHover).Border(1, c.Theme().Accent)
+		}
+		card.Children(func() {
+			ui.Column(c).Fill().Center().Gap(4).Children(func() {
+				size := float32(a.state.Settings.CardIconScale * 0.72)
+				if icon := a.icon(e); icon != nil {
+					ui.Image(c, icon).Size(size, size)
+				} else {
+					r, _ := utf8.DecodeRuneInString(e.Name)
+					ui.Box(c).Size(size, size).Radius(size * 0.25).Background(c.Theme().Accent.Alpha(0.12)).Center().Children(func() {
+						ui.Text(c, strings.ToUpper(string(r))).FontSize(size * 0.55).Bold().TextColor(c.Theme().Accent)
+					})
+				}
+				ui.Text(c, e.Name).FontSize(float32(a.state.Settings.CardFontSize)).SingleLine().MaxWidth(float32(a.state.Settings.CardWidth - 12))
+			})
+		})
+		if card.Clicked() {
+			a.selected = i
+			a.deferAction(func() { a.launch(e) })
+		}
+		card.ContextMenu(func(m *ui.Menu) {
+			if m.Item(a.text("打开", "Open")).Chosen() {
+				a.deferAction(func() { a.launch(e) })
+			}
+			if m.Item(a.text("打开所在文件夹", "Open containing folder")).Chosen() {
+				a.deferAction(func() { go func() { err := platform.OpenFolder(e.Path); a.window.Update(func() { a.report(err) }) }() })
+			}
+			if m.Item(a.text("编辑", "Edit")).Chosen() {
+				a.openEditor(e)
+			}
+			if m.Item(a.text("移除", "Remove")).Chosen() {
+				a.deferAction(func() { a.removeEntry(e.ID) })
+			}
+		})
+	})
+	if card.FileDragOver() {
+		card.Border(2, c.Theme().Accent)
+	}
+	if paths := card.DroppedFiles(); len(paths) > 0 {
+		a.importPaths(paths, a.state.ActiveGroupID, e.ID)
+	}
+	return dragSlot{index: i, bounds: slot.Bounds(), card: card}
+}
+
+func (a *App) addMenu(m *ui.Menu) {
+	if m.Item(a.text("添加应用 / 文件", "Add application / file")).Chosen() {
+		a.deferAction(func() { a.pickFiles(false) })
+	}
+	if m.Item(a.text("添加命令", "Add command")).Chosen() {
+		a.newCommand()
+	}
+	if m.Item(a.installedAppsTitle()).Chosen() {
+		a.openAddApps()
+	}
 }

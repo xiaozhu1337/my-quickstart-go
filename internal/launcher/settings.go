@@ -1,169 +1,322 @@
 package launcher
 
 import (
-	"runtime"
-	"strings"
-
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-	"github.com/nsgo-dev/nsgo/core"
-	nsw "github.com/nsgo-dev/nsgo/ui"
-
-	"my-quickstart-go/internal/buildinfo"
-	w "my-quickstart-go/internal/nativeui"
-	"my-quickstart-go/internal/platform"
 )
 
-func (a *App) nativeAppearance() {
-	cx := a.native.surface
-	s := a.state.Settings
-	p := palette(s.Theme)
-	theme := core.DefaultTheme()
-	color := func(c ui.Color) core.Color {
-		return core.RGBA(uint32(c.R)<<16|uint32(c.G)<<8|uint32(c.B), float32(c.A)/255)
+func (a *App) settingsView(c *ui.Context) {
+	width, _ := c.Size()
+	labels := []string{a.text("外观", "Appearance"), a.text("布局", "Layout"), a.text("行为", "Behavior"), a.text("快捷键", "Hotkey"), a.text("关于", "About"), a.text("资源导入", "Resource import")}
+	descriptions := []string{
+		a.text("让启动器更符合你的使用习惯。", "Make your launcher feel at home."),
+		a.text("调整应用卡片和分类栏的显示密度。", "Find the right density for your shortcuts."),
+		a.text("选择窗口、启动和文件路径的工作方式。", "Choose how the window and file paths behave."),
+		a.text("随时唤起启动器，保持键盘操作流畅。", "Keep your launcher one keystroke away."),
+		a.text("查看程序和依赖库的版本信息。", "View application and dependency versions."),
+		a.text("管理资源导入与迁移。", "Import and migrate reusable resources."),
 	}
-	pal := &theme.Light
-	mode := core.AppearanceLight
-	if p.Dark {
-		pal = &theme.Dark
-		mode = core.AppearanceDark
-	}
-	pal.Background, pal.Surface, pal.Border = color(p.Background), color(p.Surface), color(p.Border)
-	pal.Text, pal.TextMuted = color(p.Text), color(p.TextMuted)
-	pal.Accent, pal.AccentText, pal.AccentHover, pal.AccentPressed = color(p.Accent), color(p.AccentText), color(p.AccentHover), color(p.AccentPressed)
-	pal.SurfaceHover, pal.SurfacePressed, pal.Focus, pal.Selection = color(p.SurfaceHover), color(p.SurfacePressed), color(p.Focus), color(p.Selection)
-	theme.Sans = fontName(s.FontFamily)
-	cx.SetTheme(theme)
-	cx.SetAppearance(mode)
-	cx.SetLocale(s.Language)
-	level := core.WindowLevelNormal
-	if s.AlwaysOnTop {
-		level = core.WindowLevelFloating
-	}
-	cx.SetWindowLevel(level)
+	ui.Column(c).Grow(1).FillWidth().Children(func() {
+		ui.Row(c).Padding(18, 20).Gap(16).Children(func() {
+			if ui.Button(c, a.text("返回", "Back")).Label(a.text("关闭", "Close")).Height(36).Clicked() {
+				a.settingsOpen = false
+			}
+			ui.Text(c, a.text("设置", "Settings")).FontSize(20).Bold().Grow(1)
+			ui.Text(c, a.text("自动保存", "Saved automatically")).FontSize(11).TextColor(c.Theme().TextMuted)
+		})
+		ui.Divider(c)
+		if width < 760 {
+			selected := labels[a.settingsTab]
+			if ui.Select(c, &selected, labels).Label(a.text("设置分类", "Settings category")).Margin(12, 20).Changed() {
+				for i, label := range labels {
+					if label == selected {
+						a.settingsTab = i
+					}
+				}
+			}
+		}
+		ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
+			if width >= 760 {
+				ui.Scroll(c).Width(176).Children(func() {
+					ui.Column(c).Width(176).Padding(16, 12).Gap(6).Background(c.Theme().Surface.Alpha(0.5)).Children(func() {
+						for _, i := range []int{0, 1, 2, 3, 5, 4} {
+							group := ""
+							switch i {
+							case 0:
+								group = a.text("通用", "GENERAL")
+							case 1:
+								group = a.text("应用启动", "LAUNCHER")
+							case 5:
+								group = a.text("资源管理", "RESOURCES")
+							case 4:
+								group = a.text("应用信息", "INFORMATION")
+							}
+							if group != "" {
+								ui.Text(c, group).FontSize(10).Bold().TextColor(c.Theme().TextMuted).Padding(8)
+							}
+							label := labels[i]
+							button := ui.Button(c.Key(label), label).Height(40).Label(label)
+							if a.settingsTab == i {
+								button.Background(c.Theme().Accent.Alpha(0.14)).Border(1, c.Theme().Accent.Alpha(0.25))
+							}
+							if button.Clicked() {
+								a.settingsTab = i
+							}
+						}
+					})
+				})
+			}
+			ui.Scroll(c.Key(a.settingsTab)).Grow(1).Children(func() {
+				ui.Column(c).Padding(22, 24).Gap(18).Children(func() {
+					ui.Column(c).Gap(6).Children(func() {
+						ui.Text(c, labels[a.settingsTab]).FontSize(24).Bold()
+						ui.Text(c, descriptions[a.settingsTab]).TextColor(c.Theme().TextMuted)
+					})
+					switch a.settingsTab {
+					case 0:
+						a.appearanceSettings(c)
+					case 1:
+						a.layoutSettings(c)
+					case 2:
+						a.behaviorSettings(c)
+					case 3:
+						a.hotkeySettings(c)
+					case 4:
+						a.aboutSettings(c)
+					case 5:
+						if a.library != nil {
+							a.library.SettingsView(c)
+						}
+					}
+				})
+			})
+		})
+		a.statusView(c)
+	})
 }
 
-func (a *App) nativeSettings(v w.Page) core.Node {
-	t := a.text
+func (a *App) appearanceSettings(c *ui.Context) {
 	s := &a.state.Settings
-	labels := []string{t("外观", "Appearance"), t("布局", "Layout"), t("行为", "Behavior"), t("快捷键", "Hotkey"), t("关于", "About"), t("资源导入", "Resource import")}
-	back := v.Button(t("返回", "Back"), func() { a.settingsOpen = false })
-	var bar []core.Node
-	for i, label := range labels {
-		variant := nsw.ButtonGhost
-		if i == a.settingsTab {
-			variant = nsw.ButtonPrimary
+	a.settingsSection(c, a.text("配色主题", "Color theme"), a.text("点击预览，选择会立即应用到整个界面。", "Choose a palette to apply it throughout the app."), func() {
+		width, _ := c.Size()
+		columns := 5
+		if width < 900 {
+			columns = 3
 		}
-		bar = append(bar, nsw.Button{Text: label, Variant: variant, OnPress: v.Action(func() { a.settingsTab = i })})
-	}
-	var items []core.Node
-	toggle := func(label string, val *bool, invert bool) {
-		checked := core.NewSignal(v.Scope, *val != invert)
-		items = append(items, nsw.Checkbox{Text: label, Checked: checked.Get, OnChange: func(on bool) {
-			checked.Set(on)
-			*val = on != invert
-			if val == &s.AlwaysOnTop {
-				level := core.WindowLevelNormal
-				if *val {
-					level = core.WindowLevelFloating
+		ui.Grid(c).Columns(columns).Gap(10).Children(func() {
+			for _, theme := range themes {
+				p := palette(theme.id)
+				name := a.text(theme.zh, theme.en)
+				button := ui.ButtonBase(c.Key(theme.id)).Label(name).Padding(6).Radius(9).Border(1, c.Theme().Border).Background(c.Theme().Background)
+				selected := s.Theme == theme.id
+				if selected {
+					button.Border(2, c.Theme().Accent)
 				}
-				v.Scope.SetWindowLevel(level)
-			}
-			a.queueSave()
-			a.syncNative()
-		}})
-	}
-	number := func(label string, val *float64, low, high, step float64) {
-		items = append(items, w.Spread(w.Text(label), nsw.NumberInput{Label: label, Value: func() float64 { return *val }, Min: low, Max: high, Step: step, Style: core.Style{Width: core.Pt(130)}, OnChange: func(x float64) { *val = x; a.changed() }}))
-	}
-	apply := func() { a.nativeAppearance(); a.changed() }
-	switch a.settingsTab {
-	case 0:
-		var names []string
-		selected := ""
-		for _, th := range themes {
-			name := t(th.zh, th.en)
-			names = append(names, name)
-			if th.id == s.Theme {
-				selected = name
-			}
-		}
-		items = append(items, w.Row(w.Text(t("配色主题", "Color theme")), w.Select(t("主题", "Theme"), selected, names, func(name string) {
-			for i, n := range names {
-				if n == name {
-					s.Theme = themes[i].id
-					apply()
-					return
+				button.Children(func() {
+					ui.Column(c).FillWidth().Gap(8).Children(func() {
+						ui.Row(c).Height(46).Padding(7).Gap(5).Radius(5).Background(p.Background).Children(func() {
+							ui.Box(c).Width(12).HeightPercent(100).Radius(3).Background(p.Accent.Alpha(0.5))
+							ui.Column(c).Grow(1).Gap(4).Children(func() {
+								ui.Box(c).Height(5).WidthPercent(70).Radius(2).Background(p.TextMuted)
+								ui.Row(c).Grow(1).Gap(4).Children(func() {
+									ui.Box(c).Grow(1).HeightPercent(100).Radius(3).Background(p.Surface).Border(1, p.Border)
+									ui.Box(c).Grow(1).HeightPercent(100).Radius(3).Background(p.Accent)
+								})
+							})
+						})
+						ui.Text(c, name).FontSize(11).SingleLine().AlignSelf(ui.Center)
+					})
+				})
+				if button.Clicked() {
+					s.Theme = theme.id
+					if a.window != nil {
+						syncNativeTheme(theme.id)
+						if err := a.window.SetBackgroundColor(backgroundColor(theme.id)); err != nil {
+							a.report(err)
+						}
+					}
+					a.changed()
 				}
 			}
-		})),
-			w.Row(w.Text(t("语言", "Language")), w.Select(t("语言", "Language"), s.Language, []string{"zh-CN", "en"}, func(x string) { s.Language = x; apply() })))
-		choices := []string{"maye", "system", "segoe", "inter", "mono"}
-		if a.fonts == nil {
-			a.fonts = platform.Fonts()
+		})
+	})
+	a.settingsSection(c, a.text("语言与文字", "Language & text"), "", func() {
+		a.settingRow(c, a.text("语言", "Language"), a.text("界面和托盘菜单的显示语言。", "Language used in the app and tray menu."), func() {
+			if ui.Select(c, &s.Language, []string{"zh-CN", "en"}).Label(a.text("语言", "Language")).Width(160).Changed() {
+				mygo.App.SetLanguages(s.Language)
+				a.rebuildTray()
+				a.changed()
+			}
+		})
+		a.settingRow(c, a.text("字体", "Font"), a.text("选择系统字体或输入字体名称。", "Choose a system font or enter a family name."), func() {
+			fonts := append([]string{"maye", "system", "segoe", "inter", "mono"}, a.fonts...)
+			if ui.Autocomplete(c, &s.FontFamily, fonts).Label(a.text("字体", "Font")).Width(160).Changed() {
+				a.changed()
+			}
+		})
+		a.settingNumber(c, a.text("界面字号", "UI font size"), &s.FontSize, 10, 22, 1)
+	})
+}
+
+func (a *App) layoutSettings(c *ui.Context) {
+	s := &a.state.Settings
+	a.settingsSection(c, a.text("功能标签页", "Feature tabs"), a.text("应用启动始终保留；只有应用启动时自动隐藏标签栏。", "Launcher stays available; its tab bar is hidden when it is the only page."), func() {
+		showLibrary, showSchedule := !s.HideLibraryTab, !s.HideScheduleTab
+		if a.settingSwitch(c, a.text("显示 MCP / Skills", "Show MCP / Skills"), a.text("隐藏后仍保留资源，可随时重新显示。", "Keep resources when hidden and show the page again at any time."), &showLibrary) {
+			s.HideLibraryTab = !showLibrary
+			a.changed()
 		}
-		choices = append(choices, a.fonts...)
-		items = append(items, w.Row(w.Text(t("选择字体", "Choose font")), w.Select(t("选择字体", "Choose font"), s.FontFamily, choices, func(f string) { s.FontFamily = f; apply() })))
-		font := s.FontFamily
-		items = append(items, w.Field(t("字体", "Font"), &font, false), v.Button(t("应用字体", "Apply font"), func() { s.FontFamily = font; apply() }))
-		number(t("界面字号", "UI font size"), &s.FontSize, 10, 22, 1)
-	case 1:
-		items = append(items, v.Muted(t("功能标签", "Feature tabs")))
-		toggle(t("显示 MCP / Skills", "Show MCP / Skills"), &s.HideLibraryTab, true)
-		toggle(t("显示定时任务", "Show scheduled tasks"), &s.HideScheduleTab, true)
-		navigation := w.Column(items...)
-		navigation.Style.FlexGrow = 0
-		items = nil
-		number(t("卡片宽度", "Card width"), &s.CardWidth, 50, 480, 2)
-		number(t("卡片高度", "Card height"), &s.CardHeight, 40, 360, 2)
-		number(t("卡片字号", "Card font size"), &s.CardFontSize, 9, 18, 1)
-		number(t("图标大小", "Icon size"), &s.CardIconScale, 16, min(s.CardWidth, s.CardHeight)*0.82, 2)
-		number(t("分类栏宽度", "Sidebar width"), &s.SidebarWidth, 90, 320, 2)
-		dimensions := w.Column(items...)
-		dimensions.Style.FlexBasis = core.Pt(0)
-		dimensions.Style.FlexShrink = 1
-		items = []core.Node{navigation}
-		preview := v.Panel(v.Muted(t("卡片预览", "Card preview")), core.View{Style: core.Style{
-			Width: core.Pt(core.Points(s.CardWidth)), Height: core.Pt(core.Points(s.CardHeight)), Background: v.Scope.Palette().Surface,
-			AlignItems: core.AlignCenter, JustifyContent: core.JustifyCenter, BorderWidth: 1, BorderColor: v.Scope.Palette().Border, CornerRadius: 8,
-		}, Children: []core.Node{core.Text{Content: "A", Style: core.Style{FontSize: core.Points(s.CardIconScale * 0.55), Color: v.Scope.Palette().Accent}}, core.Text{Content: t("我的应用", "My application"), Style: core.Style{FontSize: core.Points(s.CardFontSize)}}}})
-		preview.Style.Background = v.Scope.Palette().Background
-		if v.Scope.Env().Window().Width >= core.Points(730+s.CardWidth) {
-			items = append(items, core.View{Style: core.Style{Direction: core.Row, Gap: 24, AlignItems: core.AlignStart, Margin: core.Edges{Top: 10}}, Children: []core.Node{dimensions, preview}})
-		} else {
-			dimensions.Style.FlexBasis = core.Length{}
-			items = append(items, dimensions, preview)
+		if a.settingSwitch(c, a.text("显示定时任务", "Show scheduled tasks"), a.text("仅隐藏页面，已启用的定时任务仍在后台执行。", "Hide the page while enabled tasks continue running in the background."), &showSchedule) {
+			s.HideScheduleTab = !showSchedule
+			a.changed()
 		}
-	case 2:
-		toggle(t("窗口置顶", "Always on top"), &s.AlwaysOnTop, false)
-		toggle(t("双击空白处隐藏", "Double-click empty space to hide"), &s.DblClickBlankToHide, false)
-		number(t("隐藏后返回应用启动（秒）", "Return to launcher after hiding (seconds)"), &s.ReturnToLauncherSeconds, 1, 3600, 1)
-		toggle(t("记住窗口位置和大小", "Remember window position and size"), &s.RememberWindowBounds, false)
-		toggle(t("启动时隐藏窗口", "Hide window on startup"), &s.HideOnStartup, false)
-		toggle(t("新增文件使用相对路径", "Use relative paths for new files"), &s.UseRelativePath, false)
-	case 3:
-		items = append(items, w.Field(t("全局快捷键", "Global shortcut"), &a.hotkey, false), v.Button(t("应用快捷键", "Apply shortcut"), func() { a.native.hotkey.Set(strings.TrimSpace(a.hotkey)) }),
-			w.Text(t("当前：", "Current: ")+a.registeredHotkey), w.Text(t("搜索  Ctrl / Cmd + F     收起  Esc     启动  Enter / Space", "Search  Ctrl / Cmd + F     Close search  Esc     Launch  Enter / Space")))
-	case 4:
-		items = append(items, w.Text("My Quickstart Go  "+buildinfo.Version), w.Text(runtime.Version()+"  "+runtime.GOOS+" / "+runtime.GOARCH))
-		for _, d := range aboutDependencies {
-			items = append(items, w.Text(d.Path+"  "+d.Version))
+	})
+	a.settingsSection(c, a.text("应用卡片", "Shortcut cards"), a.text("尺寸以设备无关像素计算。", "Sizes use device-independent pixels."), func() {
+		a.settingNumber(c, a.text("卡片宽度", "Card width"), &s.CardWidth, 50, 480, 2)
+		a.settingNumber(c, a.text("卡片高度", "Card height"), &s.CardHeight, 40, 360, 2)
+		a.settingNumber(c, a.text("卡片字号", "Card font size"), &s.CardFontSize, 9, 18, 1)
+		a.settingNumber(c, a.text("图标大小", "Icon size"), &s.CardIconScale, 16, min(s.CardWidth, s.CardHeight)*0.82, 2)
+	})
+	a.settingsSection(c, a.text("分类侧栏", "Library sidebar"), a.text("也可在主界面拖动分隔线调整。", "You can also drag the divider in the main window."), func() {
+		a.settingNumber(c, a.text("分类栏宽度", "Sidebar width"), &s.SidebarWidth, 90, 320, 2)
+	})
+	a.settingsSection(c, a.text("卡片预览", "Card preview"), a.text("预览不会启动应用。", "This preview does not launch an application."), func() {
+		ui.Scroll(c).Height(float32(s.CardHeight) + 24).Children(func() {
+			ui.Column(c).Size(float32(s.CardWidth), float32(s.CardHeight)).Center().Gap(4).Padding(6).Radius(10).Background(c.Theme().Background).Border(1, c.Theme().Border).Children(func() {
+				size := float32(s.CardIconScale * 0.72)
+				ui.Box(c).Size(size, size).Radius(size * 0.25).Background(c.Theme().Accent.Alpha(0.12)).Center().Children(func() {
+					ui.Text(c, "A").FontSize(size * 0.55).Bold().TextColor(c.Theme().Accent)
+				})
+				ui.Text(c, a.text("我的应用", "My application")).FontSize(float32(s.CardFontSize)).SingleLine().MaxWidth(float32(s.CardWidth - 12))
+			})
+		})
+	})
+}
+
+func (a *App) behaviorSettings(c *ui.Context) {
+	s := &a.state.Settings
+	a.settingsSection(c, a.text("窗口", "Window"), "", func() {
+		if a.settingToggle(c, a.text("窗口置顶", "Always on top"), a.text("让启动器显示在其他窗口上方。", "Keep the launcher above other windows."), &s.AlwaysOnTop) && a.window != nil {
+			a.window.SetAlwaysOnTop(s.AlwaysOnTop)
 		}
+		a.settingToggle(c, a.text("双击卡片区域空白处隐藏", "Hide on double click in empty grid space"), a.text("有托盘或全局快捷键时可隐藏窗口。", "Hiding requires a tray or a global shortcut."), &s.DblClickBlankToHide)
+		a.settingRow(c, a.text("隐藏后返回应用启动（秒）", "Return to launcher after hiding (seconds)"), a.text("在其他页面隐藏后开始计时；提前打开保留原页面。范围 1–3600 秒。", "Start counting when hidden on another page; reopen early to keep that page. Range: 1–3600 seconds."), func() {
+			if ui.NumberInput(c, &s.ReturnToLauncherSeconds, 1, 3600, 1).Label(a.text("自动返回等待秒数", "Return delay in seconds")).Width(160).Changed() {
+				a.changed()
+			}
+		})
+		if a.settingToggle(c, a.text("记住窗口位置和大小", "Remember window position and size"), a.text("下次启动恢复窗口的位置和尺寸。", "Restore the window bounds on the next launch."), &s.RememberWindowBounds) {
+			a.captureBounds()
+		}
+	})
+	a.settingsSection(c, a.text("启动与路径", "Launch & paths"), "", func() {
+		a.settingToggle(c, a.text("启动时隐藏窗口", "Hide window when the application starts"), a.text("程序启动后在后台待命。", "Start the launcher in the background."), &s.HideOnStartup)
+		a.settingToggle(c, a.text("新增文件使用相对路径", "Use relative paths for newly added files"), a.text("以启动器程序所在目录为基准；只影响新增文件。", "Relative to the executable directory; applies to new files only."), &s.UseRelativePath)
+	})
+}
+
+func (a *App) hotkeySettings(c *ui.Context) {
+	a.settingsSection(c, a.text("全局快捷键", "Global shortcut"), a.text("在其他应用中也能显示或隐藏启动器。", "Show or hide the launcher from any application."), func() {
+		ui.TextInput(c, &a.hotkey).Label(a.text("全局快捷键", "Global shortcut")).Placeholder("Ctrl+Alt+Space").Height(38)
+		ui.Text(c, a.text("输入组合键；留空后应用可注销快捷键。", "Enter a key combination; apply an empty value to unregister it.")).FontSize(11).TextColor(c.Theme().TextMuted)
+		ui.Row(c).Gap(12).Children(func() {
+			if ui.PrimaryButton(c, a.text("应用快捷键", "Apply shortcut")).Clicked() {
+				if err := a.applyHotkey(a.hotkey); err != nil {
+					a.report(err)
+				} else {
+					a.state.Settings.ToggleHotkey = a.registeredHotkey
+					a.changed()
+					a.message = a.text("快捷键已更新", "Shortcut updated")
+				}
+			}
+			value := a.registeredHotkey
+			if value == "" {
+				value = a.text("未设置", "Not set")
+			}
+			ui.Text(c, a.text("当前：", "Current: ")+value).FontSize(11).TextColor(c.Theme().TextMuted)
+		})
+	})
+	a.settingsSection(c, a.text("界面操作", "In-app shortcuts"), "", func() {
+		for _, row := range []struct{ label, key string }{
+			{a.text("显示并聚焦搜索", "Show and focus search"), "Ctrl / Cmd + F"},
+			{a.text("清空并收起搜索", "Clear and hide search"), "Esc"},
+			{a.text("启动选中条目", "Launch selected shortcut"), "Enter / Space"},
+		} {
+			ui.Row(c).Gap(12).Children(func() {
+				ui.Text(c, row.label).Grow(1)
+				ui.Text(c, row.key).TextColor(c.Theme().TextMuted)
+			})
+		}
+	})
+}
+
+func (a *App) settingsSection(c *ui.Context, title, description string, content func()) {
+	ui.Column(c).Padding(18).Gap(14).Radius(12).Background(c.Theme().Surface).Border(1, c.Theme().Border.Alpha(0.7)).Children(func() {
+		ui.Column(c).Gap(5).Children(func() {
+			ui.Text(c, title).FontSize(15).Bold()
+			if description != "" {
+				ui.Text(c, description).FontSize(11).TextColor(c.Theme().TextMuted)
+			}
+		})
+		content()
+	})
+}
+
+func (a *App) settingRow(c *ui.Context, label, hint string, control func()) {
+	ui.Row(c).Gap(16).AlignItems(ui.Center).Children(func() {
+		ui.Column(c).Grow(1).Gap(4).Children(func() {
+			ui.Text(c, label)
+			if hint != "" {
+				ui.Text(c, hint).FontSize(11).TextColor(c.Theme().TextMuted)
+			}
+		})
+		control()
+	})
+}
+
+func (a *App) settingToggle(c *ui.Context, label, hint string, value *bool) bool {
+	if a.settingSwitch(c, label, hint, value) {
+		a.changed()
+		return true
 	}
-	heading := w.Spread(w.Heading(t("设置", "Settings")), back)
-	content := v.Panel(w.Heading(labels[a.settingsTab]))
-	content.Style.FlexGrow = 1
-	content.Style.FlexShrink = 1
-	content.Style.FlexBasis = core.Pt(0)
-	if a.settingsTab == 5 && a.library != nil {
-		content.Children = append(content.Children, a.library.NativeImport(v))
-	} else {
-		content.Children = append(content.Children, w.Form(items...))
+	return false
+}
+
+func (a *App) settingSwitch(c *ui.Context, label, hint string, value *bool) bool {
+	row := ui.SwitchBase(c, value).Label(label).Gap(16).AlignItems(ui.Center).Radius(6).Padding(4, 0)
+	row.Children(func() {
+		ui.Column(c).Grow(1).Gap(4).Children(func() {
+			ui.Text(c, label)
+			ui.Text(c, hint).FontSize(11).TextColor(c.Theme().TextMuted)
+		})
+		color, align := c.Theme().Border, ui.Start
+		if *value {
+			color, align = c.Theme().Accent, ui.End
+		}
+		ui.Row(c).Size(36, 20).Radius(10).Padding(2).Background(color).Justify(align).Children(func() {
+			ui.Box(c).Size(16, 16).Radius(8).Background(ui.Hex("#ffffff"))
+		})
+	})
+	return row.Changed()
+}
+
+func (a *App) settingNumber(c *ui.Context, label string, value *float64, min, max, step float64) {
+	a.settingRow(c, label, "", func() {
+		if ui.NumberInput(c, value, min, max, step).Label(label).Width(160).Changed() {
+			a.changed()
+		}
+	})
+}
+
+func (a *App) statusView(c *ui.Context) {
+	if a.message == "" {
+		return
 	}
-	if v.Scope.Env().Window().Width < 700 {
-		return w.Column(heading, w.Row(bar...), content)
-	}
-	rail := v.Panel(bar...)
-	rail.Style.Width = core.Pt(156)
-	layout := core.View{Style: core.Style{Direction: core.Row, Gap: 12, FlexGrow: 1}, Children: []core.Node{rail, content}}
-	return w.Column(heading, layout)
+	ui.Divider(c)
+	ui.Row(c).Padding(8, 20).Gap(12).Children(func() {
+		ui.Text(c, a.message).FontSize(11).TextColor(c.Theme().TextMuted).Grow(1).SingleLine().Tooltip(a.message)
+		if ui.Button(c, a.text("清除提示", "Dismiss")).Clicked() {
+			a.message = ""
+		}
+	})
 }

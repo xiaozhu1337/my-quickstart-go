@@ -176,7 +176,7 @@ func (a *App) importPaths(paths []string, groupID, beforeID string) {
 				entries = append(entries, e)
 			}
 		}
-		a.post(func() {
+		a.window.Update(func() {
 			n := a.addEntries(groupID, beforeID, entries)
 			if len(errs) > 0 {
 				a.report(errors.Join(errs...))

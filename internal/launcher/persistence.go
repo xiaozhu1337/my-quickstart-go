@@ -60,12 +60,6 @@ func (s *saver) set(state model.State) {
 	}
 }
 
-func (s *saver) dirty() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.revision != s.saved
-}
-
 func (s *saver) flush() error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()

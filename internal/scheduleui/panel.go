@@ -213,23 +213,6 @@ func (p *Panel) taskList(c *ui.Context) {
 	}).Grow(1)
 }
 
-func (p *Panel) lastRun(task model.ScheduledTask) string {
-	status := p.tr("尚未执行", "Not run yet")
-	if task.LastRunAt != 0 {
-		result := p.tr("已启动", "Started")
-		if task.LastStatus == "failed" {
-			result = p.tr("启动失败：", "Failed to start: ") + task.LastError
-		} else if task.LastStatus == "starting" {
-			result = p.tr("上次启动结果未知", "Last launch result unknown")
-			if p.running[task.ID] {
-				result = p.tr("正在启动…", "Starting…")
-			}
-		}
-		status = time.UnixMilli(task.LastRunAt).Local().Format("2006-01-02 15:04:05") + "  " + result
-	}
-	return status
-}
-
 func (p *Panel) taskRow(c *ui.Context, task model.ScheduledTask, now time.Time) {
 	ui.Column(c.Key(task.ID)).FillWidth().Padding(12).Margin(0, 0, 8, 0).Gap(6).Background(c.Theme().Surface).Radius(8).Children(func() {
 		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
@@ -238,7 +221,19 @@ func (p *Panel) taskRow(c *ui.Context, task model.ScheduledTask, now time.Time) 
 		})
 		command := platform.ScheduledCommand(task)
 		ui.Text(c, command).SingleLine().Tooltip(command).FontSize(11).TextColor(c.Theme().TextMuted)
-		status := p.lastRun(task)
+		status := p.tr("尚未执行", "Not run yet")
+		if task.LastRunAt != 0 {
+			result := p.tr("已启动", "Started")
+			if task.LastStatus == "failed" {
+				result = p.tr("启动失败：", "Failed to start: ") + task.LastError
+			} else if task.LastStatus == "starting" {
+				result = p.tr("上次启动结果未知", "Last launch result unknown")
+				if p.running[task.ID] {
+					result = p.tr("正在启动…", "Starting…")
+				}
+			}
+			status = time.UnixMilli(task.LastRunAt).Local().Format("2006-01-02 15:04:05") + "  " + result
+		}
 		color := c.Theme().TextMuted
 		if task.LastStatus == "failed" {
 			color = c.Theme().Danger

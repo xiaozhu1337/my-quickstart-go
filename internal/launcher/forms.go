@@ -5,89 +5,11 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/nsgo-dev/nsgo/core"
-
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 	"my-quickstart-go/internal/model"
-	w "my-quickstart-go/internal/nativeui"
 	"my-quickstart-go/internal/platform"
 )
-
-func (a *App) nativeDialog(v w.Page) core.Node {
-	t := a.text
-	cancel := v.Button(t("取消", "Cancel"), func() { a.renameOpen, a.editorOpen, a.addOpen = false, false, false })
-	if a.renameOpen {
-		return v.Editor(t("重命名分类", "Rename group"), w.Field(t("分类名称", "Group name"), &a.renameText, false), w.Row(cancel, v.Button(t("保存", "Save"), func() {
-			if g := a.state.Group(a.renameID); g != nil && strings.TrimSpace(a.renameText) != "" {
-				g.Name = strings.TrimSpace(a.renameText)
-				a.changed()
-			}
-			a.renameOpen = false
-		})))
-	}
-	if a.editorOpen {
-		fields := []core.Node{w.Field(t("名称", "Name"), &a.draft.Name, false)}
-		if a.command {
-			fields = append(fields, w.Field(t("命令内容", "Command text"), &a.draft.Path, true))
-		} else {
-			fields = append(fields, w.Field(t("路径", "Path"), &a.draft.Path, false), w.Field(t("参数", "Arguments"), &a.draft.Args, false), w.Field(t("环境变量（每行 KEY=value）", "Environment (one KEY=value per line)"), &a.envText, true))
-		}
-		title := t("编辑快捷方式", "Edit shortcut")
-		if a.command && a.editID == "" {
-			title = t("添加命令", "Add command")
-		}
-		return v.Editor(title, append(fields, w.Row(cancel, v.Primary(t("保存", "Save"), a.saveEditor)))...)
-	}
-	status := a.uwpError
-	if a.uwpLoading {
-		status = t("正在读取应用列表…", "Loading applications…")
-	}
-	picker := w.Column(w.Row(w.Text(a.installedAppsTitle()), cancel), w.Text(status), w.Search(v.Scope, t("按名称搜索", "Filter by name"), &a.uwpQuery, func(q string) core.Node {
-		var entries []model.Entry
-		for _, e := range a.uwp {
-			if strings.Contains(strings.ToLower(e.Name), strings.ToLower(strings.TrimSpace(q))) {
-				entries = append(entries, e)
-			}
-		}
-		return w.List(len(entries), 1, 34, func(i int) any { return entries[i].Path }, func(i int) core.Node {
-			e := entries[i]
-			return v.Button(e.Name, func() { a.addEntries(a.state.ActiveGroupID, "", []model.Entry{e}); a.addOpen = false })
-		})
-	}))
-	picker.Style.Height = core.Pt(min(460, v.Scope.Env().Window().Height-80))
-	return picker
-}
-
-func (a *App) nativePick(v w.Page, dir bool) {
-	group := a.state.ActiveGroupID
-	finish := func(paths []string, err error) {
-		if err != nil {
-			a.report(err)
-			v.Refresh()
-			return
-		}
-		a.importPaths(paths, group, "")
-	}
-	cx := a.native.surface
-	cx.Post(func() {
-		if dir {
-			cx.PickDirectories(core.PickDirectoriesOptions{Multiple: true}, func(dirs []core.Directory, err error) {
-				var paths []string
-				for _, d := range dirs {
-					paths = append(paths, d.Path)
-				}
-				finish(paths, err)
-			})
-			return
-		}
-		cx.PickFiles(core.PickFilesOptions{Multiple: true}, func(files []core.File, err error) {
-			var paths []string
-			for _, f := range files {
-				paths = append(paths, f.Path)
-			}
-			finish(paths, err)
-		})
-	})
-}
 
 func (a *App) newCommand() {
 	a.editID = ""
@@ -171,6 +93,86 @@ func (a *App) saveEditor() {
 	a.changed()
 }
 
+func (a *App) editorView(c *ui.Context) {
+	_, height := c.Size()
+	title := a.text("编辑应用", "Edit application")
+	if a.command {
+		title = a.text("命令", "Command")
+	}
+	ui.Modal(c, &a.editorOpen, func() {
+		ui.Text(c, title).FontSize(20).Bold()
+		ui.Scroll(c).Grow(1).FillWidth().Children(func() {
+			ui.Column(c).FillWidth().Gap(10).Children(func() {
+				ui.Text(c, a.text("名称", "Name"))
+				ui.TextInput(c.Key("entry-name"), &a.draft.Name).Label(a.text("名称", "Name")).AutoFocus()
+				if a.command {
+					ui.Text(c, a.text("命令内容", "Command text"))
+					ui.TextArea(c.Key("entry-command"), &a.draft.Path).Label(a.text("命令内容", "Command text")).Height(130)
+				} else {
+					ui.Text(c, a.text("路径", "Path"))
+					ui.TextInput(c.Key("entry-path"), &a.draft.Path).Label(a.text("路径", "Path"))
+					ui.Text(c, a.text("参数", "Arguments"))
+					ui.TextInput(c.Key("entry-args"), &a.draft.Args).Label(a.text("参数", "Arguments"))
+					ui.Text(c, a.text("环境变量（每行 KEY=value）", "Environment (one KEY=value per line)"))
+					ui.TextArea(c.Key("entry-env"), &a.envText).Label(a.text("环境变量", "Environment")).Height(90)
+				}
+			})
+		})
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, a.text("取消", "Cancel")).Clicked() {
+				a.editorOpen = false
+			}
+			if ui.PrimaryButton(c, a.text("保存", "Save")).Disabled(a.command && strings.TrimSpace(a.draft.Path) == "").Clicked() {
+				a.deferAction(a.saveEditor)
+			}
+		})
+	}).Label(title).Width(720).Height(min(540, height-40))
+}
+
+func (a *App) renameView(c *ui.Context) {
+	ui.Modal(c, &a.renameOpen, func() {
+		ui.Text(c, a.text("重命名分类", "Rename group")).Bold()
+		submit := ui.TextInput(c, &a.renameText).Label(a.text("分类名称", "Group name")).AutoFocus().Submitted()
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, a.text("取消", "Cancel")).Clicked() {
+				a.renameOpen = false
+			}
+			if ui.PrimaryButton(c, a.text("保存", "Save")).Clicked() {
+				submit = true
+			}
+		})
+		if submit {
+			a.deferAction(func() {
+				if g := a.state.Group(a.renameID); g != nil {
+					if name := strings.TrimSpace(a.renameText); name != "" {
+						g.Name = name
+						a.changed()
+					}
+				}
+				a.renameOpen = false
+			})
+		}
+	})
+}
+
+func (a *App) pickFiles(directory bool) {
+	if a.window == nil {
+		return
+	}
+	groupID := a.state.ActiveGroupID
+	title := a.text("选择应用或文件", "Choose applications or files")
+	go func() {
+		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.window, Title: title, Multiple: true, Directory: directory})
+		a.window.Update(func() {
+			if err != nil {
+				a.report(err)
+				return
+			}
+			a.importPaths(paths, groupID, "")
+		})
+	}()
+}
+
 func (a *App) openSettings() {
 	a.settingsTab = 0
 	a.hotkey = a.state.Settings.ToggleHotkey
@@ -184,24 +186,55 @@ func (a *App) installedAppsTitle() string {
 	return a.text("添加系统应用", "Add installed application")
 }
 
+func (a *App) addAppsView(c *ui.Context) {
+	ui.Modal(c, &a.addOpen, func() {
+		ui.Text(c, a.installedAppsTitle()).FontSize(20).Bold()
+		ui.TextInput(c, &a.uwpQuery).Placeholder(a.text("按名称搜索", "Filter by name")).Label(a.text("筛选应用", "Filter applications")).AutoFocus()
+		var entries []model.Entry
+		q := strings.ToLower(strings.TrimSpace(a.uwpQuery))
+		for _, e := range a.uwp {
+			if strings.Contains(strings.ToLower(e.Name), q) {
+				entries = append(entries, e)
+			}
+		}
+		if a.uwpLoading {
+			ui.Text(c, a.text("正在读取应用列表…", "Loading applications…"))
+		}
+		if a.uwpError != "" {
+			ui.Text(c, a.uwpError).TextColor(c.Theme().Danger)
+		} else if !a.uwpLoading && len(entries) == 0 {
+			ui.Text(c, a.text("未找到应用", "No applications found"))
+		}
+		a.uwpList.Key = func(i int) any { return entries[i].Path }
+		ui.List(c, &a.uwpList, len(entries), func(i int) {
+			e := entries[i]
+			if ui.Button(c.Key(e.Path), e.Name).WidthPercent(100).Clicked() {
+				a.deferAction(func() { a.addEntries(a.state.ActiveGroupID, "", []model.Entry{e}); a.addOpen = false })
+			}
+		}).Height(250)
+		ui.Row(c).Justify(ui.End).Children(func() {
+			if ui.Button(c, a.text("关闭", "Close")).Clicked() {
+				a.addOpen = false
+			}
+		})
+	})
+}
+
 func (a *App) openAddApps() {
 	a.addOpen = true
 	a.uwp = nil
 	a.uwpQuery = ""
 	a.uwpLoading = true
 	a.uwpError = ""
-	if a.window == nil && a.native == nil {
+	if a.window == nil {
 		a.uwpLoading = false
 		return
 	}
 	go func() {
 		entries, err := platform.InstalledApps()
-		a.post(func() {
+		a.window.Update(func() {
 			a.uwp = entries
 			a.uwpLoading = false
-			if a.native != nil && a.addOpen {
-				bump(a.native.dialogContent)
-			}
 			if err != nil {
 				a.uwpError = err.Error()
 				a.report(fmt.Errorf("%s: %w", a.text("读取系统应用失败", "Could not list applications"), err))
