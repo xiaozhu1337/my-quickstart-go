@@ -8,11 +8,19 @@ import (
 	"time"
 )
 
-// ScheduledTask launches a program once per local calendar day, at Time (HH:MM).
+const (
+	WindowHidden = "hidden"
+	WindowShown  = "shown"
+)
+
+// ScheduledTask runs daily at Time or at the first user login after boot.
 type ScheduledTask struct {
-	ID   string `json:"id" yaml:"id"`
-	Name string `json:"name" yaml:"name"`
-	Time string `json:"time" yaml:"time"`
+	ID         string `json:"id" yaml:"id"`
+	AtBoot     bool   `json:"atBoot,omitempty" yaml:"atBoot,omitempty"`
+	WindowMode string `json:"windowMode,omitempty" yaml:"windowMode,omitempty"`
+	LastBootID string `json:"lastBootId,omitempty" yaml:"lastBootId,omitempty"`
+	Name       string `json:"name" yaml:"name"`
+	Time       string `json:"time" yaml:"time"`
 	// Command is a complete shell command. Legacy fields remain readable for old tasks.
 	Command string `json:"command,omitempty" yaml:"command,omitempty"`
 	Path    string `json:"path" yaml:"path"`
@@ -41,8 +49,11 @@ func (t ScheduledTask) Validate() error {
 	if strings.ContainsAny(t.Command+t.Path+t.Args+t.PythonPath, "\x00\r\n") {
 		return errors.New("command, program path, Python interpreter and arguments must be single lines without NUL")
 	}
-	if _, err := ParseDailyTime(t.Time); err != nil {
+	if _, err := ParseDailyTime(t.Time); !t.AtBoot && err != nil {
 		return err
+	}
+	if t.WindowMode != "" && t.WindowMode != WindowHidden && t.WindowMode != WindowShown {
+		return errors.New("invalid window mode")
 	}
 	if t.LastScheduledDate != "" {
 		if _, err := time.Parse(time.DateOnly, t.LastScheduledDate); err != nil {
@@ -59,12 +70,15 @@ func (t ScheduledTask) IsPython() bool {
 
 // Due deliberately skips missed minutes; restarting never catches up old tasks.
 func (t ScheduledTask) Due(now time.Time) bool {
-	return t.Enabled && t.Time == now.Format("15:04") && t.LastScheduledDate < now.Format(time.DateOnly)
+	return !t.AtBoot && t.Enabled && t.Time == now.Format("15:04") && t.LastScheduledDate < now.Format(time.DateOnly)
 }
 
 func (t ScheduledTask) NextRun(now time.Time) time.Time {
+	if t.AtBoot || !t.Enabled {
+		return time.Time{}
+	}
 	clock, err := ParseDailyTime(t.Time)
-	if err != nil || !t.Enabled {
+	if err != nil {
 		return time.Time{}
 	}
 	day := now

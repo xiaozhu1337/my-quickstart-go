@@ -4,12 +4,14 @@ package platform
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
 
+	"golang.org/x/sys/windows"
 	"my-quickstart-go/internal/model"
 )
 
@@ -81,6 +83,46 @@ func TestOpenFolderUsesExplorerInWindowsRoot(t *testing.T) {
 			}
 			if want := filepath.Join(windows, "explorer.exe"); pathErr.Path != want {
 				t.Fatalf("Explorer path = %q, want %q", pathErr.Path, want)
+			}
+		})
+	}
+}
+
+func TestScheduledWindowChild(t *testing.T) {
+	output := os.Getenv("QUICKSTART_WINDOW_RESULT")
+	if output == "" {
+		return
+	}
+	var info windows.StartupInfo
+	if err := windows.GetStartupInfo(&info); err != nil {
+		t.Fatal(err)
+	}
+	h, _, _ := syscall.NewLazyDLL("kernel32.dll").NewProc("GetConsoleWindow").Call()
+	hidden := info.Flags&windows.STARTF_USESHOWWINDOW != 0 && info.ShowWindow == windows.SW_HIDE
+	if err := os.WriteFile(output, []byte(fmt.Sprintf("console=%t,hidden=%t", h != 0, hidden)), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestScheduledWindowModeReachesProgram(t *testing.T) {
+	dir := scratchDir(t)
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ mode, want string }{
+		{model.WindowHidden, "console=false,hidden=true"},
+		{model.WindowShown, "console=true,hidden=false"},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			result := filepath.Join(dir, tc.mode+".txt")
+			t.Setenv("QUICKSTART_WINDOW_RESULT", result)
+			task := model.ScheduledTask{Name: "probe", Command: commandLine(exe, "-test.run=TestScheduledWindowChild"), WindowMode: tc.mode}
+			if err := LaunchScheduledTask(task); err != nil {
+				t.Fatal(err)
+			}
+			if got := string(waitForFile(t, result)); got != tc.want {
+				t.Fatalf("startup info %q, want %q", got, tc.want)
 			}
 		})
 	}

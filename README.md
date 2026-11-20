@@ -14,7 +14,7 @@ A native desktop launcher for **Windows, macOS, and Linux**, built in Go with [M
 - **Five themes:** Graphite, Paper, Midnight, Forest, and Rose. Change the theme immediately from its preview card. Choose English or Simplified Chinese, adjust fonts, and customize card and sidebar dimensions.
 - **Desktop integration:** tray controls, a global show/hide shortcut, always-on-top mode, hidden startup, remembered window bounds, and paths relative to the executable. Windows supports `.lnk` resolution and UWP entries; other platforms use their own application lists and launch mechanisms.
 - **Local persistence:** SQLite storage with transactional saves, legacy data migration, and protection against replacing unreadable data with an empty state.
-- **Scheduled tasks:** run a complete command daily at a chosen time, with enable/disable controls, manual runs, and a searchable paginated list.
+- **Scheduled tasks:** run a complete command daily at a chosen time or at Windows startup after sign-in, with enable/disable controls, manual runs, and a searchable paginated list.
 
 Right-click empty space in the card grid to add entries. Right-click empty space in the sidebar to add a group, or right-click a group to rename or remove it. Settings is at the far right of the top tab bar, available from every tab.
 
@@ -28,13 +28,17 @@ More previews: [themes](docs/themes-preview.png), [search](docs/search-preview.p
 
 ## Scheduled tasks
 
-Open **Scheduled tasks → Add task**, enter a name, daily time in 24-hour `HH:MM` format, and the complete **Command**, then save. For example, enter `python C:\xx.py` or `"C:\Python env\python.exe" "C:\scripts\daily report.py" --daily`. Programs, interpreters, script paths, and arguments share one field. Quote paths containing spaces. Commands run through Windows `cmd.exe` (or `/bin/sh` on macOS/Linux) without opening a console window; programs on PATH, batch scripts, and shell operators are supported.
+Open **Scheduled tasks → Add task**, enter a name and the complete **Command**, then choose a daily time (24-hour clock) or **Run at startup (after Windows sign-in)**. Examples include `python C:\xx.py` and `"C:\Python env\python.exe" "C:\scripts\daily report.py" --daily`. Quote paths containing spaces. Commands support programs on PATH, batch scripts, and shell operators.
 
-New commands use the launcher's directory as their working directory. To choose another directory on Windows, use `cd /d "C:\scripts" && python task.py`. Existing tasks remain compatible and appear as a combined command when edited; changing only their name or time preserves their original interpreter and working directory. Editing the command switches to the new command execution behavior. If a command exits with an error, up to the last 8 KiB of stderr is written asynchronously to the application's rotating `logs` directory.
+On Windows, **Program window** offers **Hide window** (the default for new tasks), **Show window**, and **Hide console only** (the default for existing tasks). The launcher passes this preference to a directly executed program, or to `cmd.exe` for shell commands such as pipelines. GUI programs can choose to display subsequent windows themselves. **Run now** uses the same preference.
+
+Enabling the first startup task registers the launcher for the current Windows user's sign-in. Each enabled startup task gets one automatic attempt per boot after sign-in. Signing in again during the same boot or opening the launcher manually does not trigger another attempt. Disabling or deleting the last enabled startup task removes the login registration.
+
+New commands use the launcher's directory as their working directory. To switch directories on Windows, use `cd /d "C:\scripts" && python task.py`. Existing tasks preserve their interpreter and working directory when you change their name, trigger or window preference. When the console is hidden, the launcher writes the last 8 KiB of stderr from failed commands to the rotating `logs` directory. With **Show window**, console programs write to their own window.
 
 The list supports name/command search, 20 tasks per page, editing, deletion, enable/disable, and **Run now**. It shows the next scheduled time and latest launch result. A successful result means the operating system accepted the launch, not that the command finished successfully; errors inside a running shell, such as an unknown program, are recorded in the logs. Manual runs also work for disabled tasks and do not replace the day's scheduled run.
 
-Tasks use the computer's local clock and continue while the launcher is hidden in the tray. Keep the launcher running: exiting it stops scheduling, and missed minutes during exit or sleep are skipped. Each task is automatically attempted at most once per day, including failed launches; the daily claim is saved before starting the program to prevent duplicate attempts after a restart. If this save fails, the program is not launched. Task definitions and their latest results persist in the local SQLite database.
+Daily tasks use the computer's local clock and continue while the launcher is hidden in the tray. Keep the launcher running: exiting it stops scheduling, and missed minutes during exit or sleep are skipped. Each daily task is automatically attempted at most once per day, including failed launches; the daily claim is saved before starting the program to prevent duplicate attempts after a restart. If this save fails, the program is not launched. Task definitions and their latest results persist in the local SQLite database.
 
 When the hidden-window return delay expires, the app returns to Launcher and resets the scheduled-task view: add/edit/delete dialogs close, unsaved drafts are discarded, and search and pagination reset. Saved tasks and background scheduling continue. Reopening before the deadline preserves the current view. Adjust the delay under **Settings → Behavior**.
 

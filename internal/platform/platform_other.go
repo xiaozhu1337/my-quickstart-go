@@ -63,9 +63,9 @@ func Launch(entry model.Entry) error {
 	return start(cmd)
 }
 
-func LaunchScheduled(entry model.Entry) error {
+func launchScheduledEntry(entry model.Entry, mode string) error {
 	if (model.ScheduledTask{Path: entry.Path}).IsPython() {
-		return launchPython(entry, "")
+		return launchPython(entry, "", mode)
 	}
 	return Launch(entry)
 }
@@ -78,7 +78,9 @@ func pythonCommand(python, script, raw string) (*exec.Cmd, error) {
 	return exec.Command(python, append([]string{script}, args...)...), nil
 }
 
-func scheduledCommand(command string) *exec.Cmd { return exec.Command("/bin/sh", "-c", command) }
+func startTaskWindow(cmd *exec.Cmd, label, mode string) error { return startScheduled(cmd, label) }
+
+func scheduledCommand(command, mode string) *exec.Cmd { return exec.Command("/bin/sh", "-c", command) }
 
 func quoteScheduledPath(path string) string {
 	return "'" + strings.ReplaceAll(path, "'", "'\"'\"'") + "'"

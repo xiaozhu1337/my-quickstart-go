@@ -156,6 +156,20 @@ func (p *Panel) task(id string) *model.ScheduledTask {
 	return nil
 }
 
+func (p *Panel) RunAtBoot(bootID string) {
+	if bootID == "" || p.stopped {
+		return
+	}
+	now := time.Now()
+	for i := range *p.tasks {
+		t := &(*p.tasks)[i]
+		if t.AtBoot && t.Enabled && t.LastBootID != bootID && !p.running[t.ID] {
+			t.LastBootID = bootID
+			p.run(t.ID, now, false)
+		}
+	}
+}
+
 func (p *Panel) tick(now time.Time) {
 	for _, task := range *p.tasks {
 		if task.Due(now) {
@@ -221,10 +235,10 @@ func (p *Panel) View(c *ui.Context) {
 				p.page = 0
 			}
 			if ui.PrimaryButton(c, p.tr("新增任务", "Add task")).Clicked() {
-				p.edit(model.ScheduledTask{Time: "09:00", Enabled: true})
+				p.edit(model.ScheduledTask{Time: "09:00", Enabled: true, WindowMode: model.WindowHidden})
 			}
 		})
-		ui.Text(c, p.tr("按电脑本地时间每天执行。隐藏到托盘后继续运行；退出或休眠错过的时间不补执行。", "Runs daily in local time while the app is open, including in the tray. Missed times are skipped.")).FontSize(11).TextColor(c.Theme().TextMuted)
+		ui.Text(c, p.tr("每日任务按本地时间执行，支持托盘运行，错过的时间不补执行。", "Daily tasks run in local time, including in the tray. Missed times are skipped.")).FontSize(11).TextColor(c.Theme().TextMuted)
 		p.taskList(c)
 	})
 	p.dialogs(c)
@@ -286,7 +300,11 @@ func (p *Panel) taskRow(c *ui.Context, task model.ScheduledTask, now time.Time) 
 	card.Children(func() {
 		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, task.Name).Bold().SingleLine().Tooltip(task.Name).Grow(1)
-			ui.Text(c, p.tr("每天 ", "Daily ")+task.Time).TextColor(c.Theme().Accent)
+			trigger := p.tr("每天 ", "Daily ") + task.Time
+			if task.AtBoot {
+				trigger = p.tr("开机时", "At startup")
+			}
+			ui.Text(c, trigger).TextColor(c.Theme().Accent)
 		})
 		command := platform.ScheduledCommand(task)
 		ui.Text(c, command).SingleLine().Tooltip(command).FontSize(11).TextColor(c.Theme().TextMuted)
@@ -309,7 +327,9 @@ func (p *Panel) taskRow(c *ui.Context, task model.ScheduledTask, now time.Time) 
 		}
 		ui.Text(c, status).SingleLine().Tooltip(status).FontSize(11).TextColor(color)
 		next := p.tr("已停用", "Disabled")
-		if when := task.NextRun(now); !when.IsZero() {
+		if task.AtBoot && task.Enabled {
+			next = p.tr("下次开机登录时", "Next login after boot")
+		} else if when := task.NextRun(now); !when.IsZero() {
 			next = p.tr("下次：", "Next: ") + when.Format("2006-01-02 15:04")
 		}
 		ui.Text(c, next).FontSize(11).TextColor(c.Theme().TextMuted)

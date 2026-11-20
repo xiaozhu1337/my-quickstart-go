@@ -1,6 +1,7 @@
 package scheduleui
 
 import (
+	"runtime"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -21,7 +22,7 @@ func (p *Panel) save() {
 		p.failure = p.tr("请填写任务名称和执行命令。", "Enter a task name and command.")
 		return
 	}
-	if _, err := model.ParseDailyTime(task.Time); err != nil {
+	if _, err := model.ParseDailyTime(task.Time); !task.AtBoot && err != nil {
 		p.failure = p.tr("请输入有效的时间，格式为 HH:MM，例如 09:30（00:00–23:59）。", "Enter a valid HH:MM time, e.g. 09:30 (00:00-23:59).")
 		return
 	}
@@ -44,7 +45,7 @@ func (p *Panel) save() {
 		}
 		// A timer may have fired while this editor was open; keep its latest result.
 		task.LastRunAt, task.LastStatus, task.LastError = old.LastRunAt, old.LastStatus, old.LastError
-		task.LastScheduledDate = old.LastScheduledDate
+		task.LastScheduledDate, task.LastBootID = old.LastScheduledDate, old.LastBootID
 		*old = task
 	} else {
 		*p.tasks = append(*p.tasks, task)
@@ -65,13 +66,27 @@ func (p *Panel) dialogs(c *ui.Context) {
 			ui.Column(c).FillWidth().Gap(8).Children(func() {
 				ui.Text(c, p.tr("任务名称", "Task name"))
 				ui.TextInput(c, &p.draft.Name).Label(p.tr("任务名称", "Task name")).AutoFocus()
-				ui.Text(c, p.tr("每天执行时间（24 小时制）", "Daily time (24-hour clock)"))
-				ui.TextInput(c, &p.draft.Time).Label(p.tr("执行时间", "Time")).Placeholder("09:30")
+				if runtime.GOOS == "windows" {
+					ui.Checkbox(c, &p.draft.AtBoot, p.tr("开机时执行（登录 Windows 后）", "Run at startup (after Windows sign-in)"))
+				}
+				if !p.draft.AtBoot {
+					ui.Text(c, p.tr("每天执行时间（24 小时制）", "Daily time (24-hour clock)"))
+					ui.TextInput(c, &p.draft.Time).Label(p.tr("执行时间", "Time")).Placeholder("09:30")
+				}
 				ui.Text(c, p.tr("执行命令（含参数）", "Command (including arguments)"))
 				ui.TextInput(c, &p.draft.Command).Label(p.tr("执行命令", "Command")).Placeholder(`python C:\scripts\task.py`)
 				ui.Text(c, p.tr("直接输入完整命令，含空格的路径请加双引号。", "Enter the complete command. Put paths containing spaces in double quotes.")).FontSize(11).TextColor(c.Theme().TextMuted)
 				ui.Checkbox(c, &p.draft.Enabled, p.tr("启用此任务", "Enable this task"))
-				ui.Text(c, p.tr("后台运行，不弹出控制台。相对路径以本程序所在目录为起点。", "Runs without a console. Relative paths start in this application's folder.")).FontSize(11).TextColor(c.Theme().TextMuted)
+				if runtime.GOOS == "windows" {
+					hidden, shown, legacy := p.tr("隐藏窗口", "Hide window"), p.tr("显示窗口", "Show window"), p.tr("仅隐藏控制台", "Hide console only")
+					mode := map[string]string{model.WindowHidden: hidden, model.WindowShown: shown, "": legacy}[p.draft.WindowMode]
+					ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+						ui.Text(c, p.tr("启动程序时", "Program window"))
+						if ui.Select(c, &mode, []string{hidden, shown, legacy}).Label(p.tr("窗口显示方式", "Window visibility")).Width(160).Changed() {
+							p.draft.WindowMode = map[string]string{hidden: model.WindowHidden, shown: model.WindowShown, legacy: ""}[mode]
+						}
+					})
+				}
 			})
 		})
 		if p.failure != "" {

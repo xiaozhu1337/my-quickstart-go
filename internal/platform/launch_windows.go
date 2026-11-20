@@ -58,10 +58,71 @@ func commandProcess(command string) *exec.Cmd {
 	return cmd
 }
 
-func scheduledCommand(command string) *exec.Cmd {
-	cmd := commandProcess(command)
+// Plain executable commands can receive the window preference directly. Shell
+// builtins, expansions, pipelines and batch files keep cmd.exe semantics.
+func scheduledCommand(command, mode string) *exec.Cmd {
+	if mode != "" {
+		if path, args, ok := directScheduledProgram(command); ok {
+			cmd := exec.Command(path)
+			cmd.SysProcAttr = &syscall.SysProcAttr{CmdLine: commandLine(path, args)}
+			return cmd
+		}
+	}
+	return commandProcess(command)
+}
+
+func directScheduledProgram(command string) (string, string, bool) {
+	if strings.ContainsAny(command, "%!^") {
+		return "", "", false
+	}
+	quoted := false
+	split := len(command)
+	for i, c := range command {
+		if c == '"' {
+			quoted = !quoted
+			continue
+		}
+		if quoted {
+			continue
+		}
+		if strings.ContainsRune("&|<>()", c) {
+			return "", "", false
+		}
+		if (c == ' ' || c == '\t') && split == len(command) {
+			split = i
+		}
+	}
+	if quoted {
+		return "", "", false
+	}
+	name := strings.Trim(command[:split], "\"")
+	if name == "" || strings.ContainsRune(name, '"') {
+		return "", "", false
+	}
+	if filepath.Ext(name) == "" {
+		builtins := " assoc break call cd chdir cls color copy date del dir echo endlocal erase exit for ftype goto if md mkdir mklink move path pause popd prompt pushd rd rem ren rename rmdir set setlocal shift start time title type ver verify vol "
+		if strings.Contains(builtins, " "+strings.ToLower(name)+" ") {
+			return "", "", false
+		}
+	}
+	path, err := exec.LookPath(absolutePath(name))
+	if err != nil && filepath.Base(name) == name {
+		path, err = exec.LookPath(name)
+	}
+	ext := strings.ToLower(filepath.Ext(path))
+	if err != nil || (ext != ".exe" && ext != ".com") {
+		return "", "", false
+	}
+	return path, strings.TrimSpace(command[split:]), true
+}
+
+func startTaskWindow(cmd *exec.Cmd, label, mode string) error {
+	if mode == model.WindowShown {
+		return startConsole(cmd)
+	}
 	cmd.SysProcAttr.CreationFlags = 0x08000000 // CREATE_NO_WINDOW
-	return cmd
+	cmd.SysProcAttr.HideWindow = mode == model.WindowHidden
+	return startScheduled(cmd, label)
 }
 
 func quoteScheduledPath(path string) string { return `"` + path + `"` }
@@ -104,11 +165,10 @@ func startConsole(cmd *exec.Cmd) error {
 }
 
 func Launch(entry model.Entry) error {
-	return launch(entry, false)
+	return launch(entry, false, "")
 }
 
-// LaunchScheduled hides console windows while allowing graphical applications to open.
-func LaunchScheduled(entry model.Entry) error {
+func launchScheduledEntry(entry model.Entry, mode string) error {
 	path := absolutePath(entry.Path)
 	info, err := os.Stat(path)
 	if err != nil {
@@ -119,9 +179,9 @@ func LaunchScheduled(entry model.Entry) error {
 	}
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".exe", ".com", ".bat", ".cmd":
-		return launch(entry, true)
+		return launch(entry, true, mode)
 	case ".py", ".pyw":
-		return launchPython(entry, "")
+		return launchPython(entry, "", mode)
 	default:
 		return errors.New("scheduled program must be an .exe, .com, .bat, .cmd, .py or .pyw file")
 	}
@@ -136,7 +196,7 @@ func pythonCommand(python, script, args string) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-func launch(entry model.Entry, background bool) error {
+func launch(entry model.Entry, scheduled bool, mode string) error {
 	path := cleanInput(entry.Path)
 	if path == "" || strings.ContainsRune(path, 0) || strings.ContainsRune(entry.Args, 0) {
 		return errors.New("invalid launch path or arguments")
@@ -179,8 +239,8 @@ func launch(entry model.Entry, background bool) error {
 		}
 	}
 	cmd.Env = env
-	if background {
-		cmd.SysProcAttr.CreationFlags |= 0x08000000 // CREATE_NO_WINDOW
+	if scheduled {
+		return startTaskWindow(cmd, "scheduled program "+path, mode)
 	} else if ext == ".bat" || ext == ".cmd" {
 		return startConsole(cmd)
 	}

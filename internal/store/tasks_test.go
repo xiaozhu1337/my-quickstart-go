@@ -135,6 +135,37 @@ func TestTasksWithoutCommandColumnRemainReadable(t *testing.T) {
 	}
 }
 
+func TestUpgradeStartupTaskColumns(t *testing.T) {
+	s := openTestStore(t)
+	before := sampleState()
+	before.Tasks = []model.ScheduledTask{{ID: "old", Name: "Old", Command: "app.exe", Time: "09:00", Enabled: true}}
+	if err := s.Save(before); err != nil {
+		t.Fatal(err)
+	}
+	for _, col := range []string{"at_boot", "window_mode", "last_boot_id"} {
+		if _, err := s.db.Exec("ALTER TABLE scheduled_tasks DROP COLUMN " + col); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := s.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertState(t, before, got)
+	after := got
+	after.Tasks = append([]model.ScheduledTask(nil), got.Tasks...)
+	task := &after.Tasks[0]
+	task.AtBoot, task.WindowMode, task.LastBootID = true, model.WindowShown, "boot-one"
+	if err := s.SaveChanges(before, after, Tasks); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertState(t, after, got)
+}
+
 func TestExistingDatabaseWithoutTasksRemainsReadable(t *testing.T) {
 	s := openTestStore(t)
 	want := sampleState()

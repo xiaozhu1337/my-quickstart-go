@@ -158,6 +158,9 @@ func (a *App) Ready() {
 	a.prepareStartup()
 }
 
+func (a *App) RunAtBoot(id string)          { a.schedule.RunAtBoot(id) }
+func (a *App) ReportStartupError(err error) { a.report(err) }
+
 func (a *App) Show() {
 	// Apply an elapsed deadline before preparing the first visible frame, even
 	// when the timer callback is still queued on the UI thread.

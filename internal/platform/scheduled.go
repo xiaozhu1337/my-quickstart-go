@@ -19,16 +19,18 @@ func LaunchScheduledTask(task model.ScheduledTask) error {
 		if command == "" || strings.ContainsAny(command, "\x00\r\n") {
 			return errors.New("command must be a nonempty single line without NUL")
 		}
-		cmd := scheduledCommand(command)
+		cmd := scheduledCommand(command, task.WindowMode)
 		cmd.Dir = BaseDir()
-		return startScheduled(cmd, "scheduled command "+task.Name)
+		return startTaskWindow(cmd, "scheduled command "+task.Name, task.WindowMode)
 	}
 	entry := model.Entry{Name: task.Name, Path: task.Path, Args: task.Args}
 	if task.IsPython() {
-		return launchPython(entry, task.PythonPath)
+		return launchPython(entry, task.PythonPath, task.WindowMode)
 	}
-	return LaunchScheduled(entry)
+	return launchScheduledEntry(entry, task.WindowMode)
 }
+
+func LaunchScheduled(entry model.Entry) error { return launchScheduledEntry(entry, "") }
 
 // ScheduledCommand combines old task fields for display without changing saved tasks.
 func ScheduledCommand(task model.ScheduledTask) string {
@@ -82,7 +84,7 @@ func pythonInterpreter(value string) (string, error) {
 	return path, nil
 }
 
-func launchPython(entry model.Entry, interpreter string) error {
+func launchPython(entry model.Entry, interpreter, mode string) error {
 	if strings.ContainsAny(entry.Path+entry.Args+interpreter, "\x00\r\n") {
 		return errors.New("script path, interpreter and arguments must be single lines without NUL")
 	}
@@ -107,7 +109,7 @@ func launchPython(entry model.Entry, interpreter string) error {
 	if err != nil {
 		return err
 	}
-	return startScheduled(cmd, "scheduled Python script "+script)
+	return startTaskWindow(cmd, "scheduled Python script "+script, mode)
 }
 
 func startScheduled(cmd *exec.Cmd, label string) error {

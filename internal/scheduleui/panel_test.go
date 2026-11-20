@@ -3,6 +3,7 @@ package scheduleui
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"testing"
 	"time"
 
@@ -155,5 +156,59 @@ func TestTaskPaginationAndSearch(t *testing.T) {
 	tt.Type("task-44")
 	if p.page != 0 || !tt.HasText("task-44") || !tt.HasText("1 tasks") {
 		t.Fatal("search must find tasks outside the current page")
+	}
+}
+
+func TestStartupClaimsAcrossLaunches(t *testing.T) {
+	p := testPanel()
+	now := time.Now()
+	*p.tasks = []model.ScheduledTask{
+		{ID: "startup", Enabled: true, AtBoot: true, Time: now.Format("15:04")},
+		{ID: "disabled", AtBoot: true},
+		{ID: "daily", Enabled: true, Time: now.Add(time.Hour).Format("15:04")},
+	}
+	persisted := ""
+	p.flush = func() error { persisted = (*p.tasks)[0].LastBootID; return nil }
+	var events []string
+	p.launch = func(task model.ScheduledTask) error {
+		if task.ID != "startup" || persisted != task.LastBootID {
+			t.Fatal("incorrect claim before launch", task, persisted)
+		}
+		events = append(events, task.LastBootID)
+		return nil
+	}
+	p.tick(now)
+	p.run("startup", now, false)
+	p.RunAtBoot("boot-one")
+	p.RunAtBoot("boot-one")
+	restarted := New(p.tasks, func() {}, p.flush)
+	restarted.launch = p.launch
+	restarted.RunAtBoot("boot-one")
+	restarted.RunAtBoot("boot-two")
+	if len(events) != 3 || events[0] != "" || events[1] != "boot-one" || events[2] != "boot-two" {
+		t.Fatal("manual, first boot and second boot expected", events)
+	}
+}
+
+func TestStartupTaskEditor(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows login and window settings")
+	}
+	p := testPanel()
+	tt := ui.NewTester(p.View, 960, 640)
+	click(t, tt, "Add task")
+	if p.draft.WindowMode != model.WindowHidden {
+		t.Fatal("new task window default", p.draft)
+	}
+	click(t, tt, "Run at startup (after Windows sign-in)")
+	if !p.draft.AtBoot || tt.HasText("Daily time (24-hour clock)") {
+		t.Fatal("startup trigger not selected")
+	}
+	click(t, tt, "Window visibility")
+	click(t, tt, "Show window")
+	p.draft.Name, p.draft.Command, p.draft.Time = "Login tool", "app.exe", ""
+	click(t, tt, "Save")
+	if len(*p.tasks) != 1 || !(*p.tasks)[0].AtBoot || (*p.tasks)[0].WindowMode != model.WindowShown || !tt.HasText("Next login after boot") {
+		t.Fatal("startup editor did not save", *p.tasks, p.failure)
 	}
 }

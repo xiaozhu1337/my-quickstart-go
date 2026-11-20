@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo"
+	"my-quickstart-go/internal/boot"
 	"my-quickstart-go/internal/launcher"
 	"my-quickstart-go/internal/logging"
 	"my-quickstart-go/internal/model"
@@ -16,6 +17,7 @@ import (
 
 func main() {
 	data := flag.String("data", "", "Path to launcher database")
+	startup := flag.Bool(boot.Flag, false, "Run enabled tasks after Windows sign-in")
 	flag.Parse()
 	exe, err := os.Executable()
 	if err != nil {
@@ -34,9 +36,6 @@ func main() {
 	if languages := mygo.App.PreferredLanguages(); len(languages) > 0 && strings.HasPrefix(strings.ToLower(languages[0]), "zh") {
 		model.DefaultLanguage = "zh-CN"
 	}
-	if !mygo.App.RequestSingleInstanceLock() {
-		return
-	}
 	path := *data
 	if path == "" {
 		path, err = store.DefaultPath()
@@ -45,18 +44,56 @@ func main() {
 			return
 		}
 	}
+	path, err = filepath.Abs(path)
+	if err != nil {
+		startupError(err)
+		return
+	}
+	// Different databases have independent schedules and login registrations.
+	defaultPath, _ := store.DefaultPath()
+	if boot.Profile(path) != boot.Profile(defaultPath) {
+		mygo.App.SetName("My Quickstart Go " + boot.Profile(path))
+	}
+	if !mygo.App.RequestSingleInstanceLock() {
+		return
+	}
+	mygo.App.SetName("My Quickstart Go")
 	db, state, err := store.OpenWithState(path)
 	if err != nil {
 		startupError(err)
 		return
 	}
 	defer db.Close()
-	app := launcher.New(state, db)
+	persistence := &scheduledStore{Store: db, exe: exe}
+	registrationErr := persistence.syncRegistration(boot.Enabled(state.Tasks))
+	app := launcher.New(state, persistence)
 	app.SetLibrary(filepath.Join(filepath.Dir(db.Path()), "library"))
 	defer app.Close()
 	mygo.App.OnWindowAllClosed(func() {})
-	mygo.App.OnSecondInstance(func([]string, string) { app.Show() })
-	mygo.App.WhenReady(app.Ready)
+	runStartup := func() {
+		id, err := boot.ID()
+		if err != nil {
+			app.ReportStartupError(err)
+			return
+		}
+		app.RunAtBoot(id)
+	}
+	mygo.App.OnSecondInstance(func(args []string, _ string) {
+		if len(args) > 0 && args[0] == "--"+boot.Flag {
+			runStartup()
+			return
+		}
+		app.Show()
+	})
+	mygo.App.WhenReady(func() {
+		app.Ready()
+		if registrationErr != nil {
+			app.ReportStartupError(registrationErr)
+		}
+		if *startup {
+			runStartup()
+		}
+	})
 	mygo.App.OnBeforeQuit(app.BeforeQuit)
 	if err := mygo.App.Run(); err != nil {
 		log.Print(err)
