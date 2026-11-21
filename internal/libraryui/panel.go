@@ -194,7 +194,7 @@ func (p *Panel) View(c *ui.Context) {
 		ui.Divider(c)
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, "Agent")
-			ui.Select(c, &p.agent, []string{"codex", "pi"}).Width(100).Disabled(p.Busy)
+			ui.Select(c, &p.agent, []string{"codex", "pi", "antigravity"}).Width(136).Disabled(p.Busy)
 			ui.TextInput(c.Key("project-directory"), &p.project).Label(p.tr("项目目录", "Project directory")).Placeholder(p.tr("选择要写入的项目目录", "Choose a project directory")).Grow(1).Disabled(p.Busy)
 			if ui.Button(c, p.tr("浏览", "Browse")).Disabled(p.Busy).Clicked() {
 				p.pick(false)

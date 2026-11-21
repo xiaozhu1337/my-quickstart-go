@@ -112,8 +112,16 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	var result Result
-	if agent != "codex" && agent != "pi" {
-		return result, errors.New("仅支持 codex 和 pi")
+	var configRel, skillRel string
+	switch agent {
+	case "codex":
+		configRel, skillRel = ".codex/config.toml", ".codex/skills"
+	case "pi":
+		configRel, skillRel = ".pi/mcp.json", ".pi/skills"
+	case "antigravity":
+		configRel, skillRel = ".agents/mcp_config.json", ".agents/skills"
+	default:
+		return result, fmt.Errorf("不支持的项目 Agent: %s", agent)
 	}
 	if strings.TrimSpace(project) == "" {
 		return result, errors.New("请选择项目目录")
@@ -157,11 +165,7 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 	}
 	hash := sha256.Sum256([]byte(key + "\x00" + agent))
 	profile := filepath.Join(l.Root, "projects", fmt.Sprintf("%x", hash[:16]))
-	configRel, skillRel, filename := filepath.Join(".codex", "config.toml"), filepath.Join(".codex", "skills"), "config.toml"
-	if agent == "pi" {
-		configRel, skillRel, filename = filepath.Join(".pi", "mcp.json"), filepath.Join(".pi", "skills"), "mcp.json"
-	}
-	config, generated := filepath.Join(project, configRel), filepath.Join(profile, filename)
+	config, generated := filepath.Join(project, configRel), filepath.Join(profile, filepath.Base(configRel))
 	manifestPath := filepath.Join(profile, "deployment.yaml")
 	manifest := Deployment{Project: project, Agent: agent, Managed: map[string]string{}}
 	if b, e := os.ReadFile(manifestPath); e == nil {
@@ -310,7 +314,7 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 	if err != nil {
 		return fail(err)
 	}
-	comment := "# project: canonical project path; agent: codex or pi.\n# managed: MCP names mapped to owned resource IDs.\n# config_hash: SHA-256 of the last deployed MCP file.\n# skills: deployed names mapped to resource id and content hash.\n"
+	comment := "# project: canonical project path; agent: deployment target.\n# managed: MCP names mapped to owned resource IDs.\n# config_hash: SHA-256 of the last deployed MCP file.\n# skills: deployed names mapped to resource id and content hash.\n"
 	if err = tx.write(manifestPath, append([]byte(comment), b...)); err != nil {
 		return fail(err)
 	}
@@ -336,9 +340,9 @@ func mergeConfig(data []byte, agent string, items []Item, manifest *Deployment) 
 	if doc == nil {
 		return nil, errors.New("现有项目配置须为对象")
 	}
-	key := "mcp_servers"
-	if agent == "pi" {
-		key = "mcpServers"
+	key := "mcpServers"
+	if agent == "codex" {
+		key = "mcp_servers"
 	}
 	servers := map[string]any{}
 	if existing, ok := doc[key]; ok {
@@ -366,7 +370,11 @@ func mergeConfig(data []byte, agent string, items []Item, manifest *Deployment) 
 				entry["cwd"] = s.Cwd
 			}
 		} else {
-			entry["url"] = s.URL
+			urlKey := "url"
+			if agent == "antigravity" {
+				urlKey = "serverUrl"
+			}
+			entry[urlKey] = s.URL
 			if len(s.Headers) > 0 {
 				h := "headers"
 				if agent == "codex" {

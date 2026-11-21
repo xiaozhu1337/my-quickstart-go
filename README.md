@@ -50,7 +50,7 @@ The top tabs switch between **Launcher**, **MCP / Skills**, and **Scheduled task
 
 Use **Add MCP** to save a named server with YAML fields `command`, `args`, `env`, `cwd`, or HTTP `url` and `headers`. Use **Add Skill** to import a directory containing `SKILL.md` with `name` and `description` frontmatter. The library references that directory directly without copying files. Deployment reads the current source contents; copies containing nested symlinks are rejected and limited to 100 MiB and 10,000 paths.
 
-Select resources, choose **codex** or **pi**, select a project directory, and click **Copy to project**. Project directories and Skill source directories accept `~` for the current user's home directory, such as `~\code\kernel-debug` or `~/code/kernel-debug`.
+Select resources, choose **codex**, **pi**, or **antigravity**, select a project directory, and click **Copy to project**. Project directories and Skill source directories accept `~` for the current user's home directory, such as `~\code\kernel-debug` or `~/code/kernel-debug`.
 
 MCP names can be edited after saving. Copying a renamed resource again replaces its previously managed name in that project, while preserving other servers. Duplicate resource names remain disallowed.
 
@@ -70,6 +70,7 @@ To migrate existing resources, open **Settings → Resources → Resource import
 | --- | --- | --- |
 | Codex | `.codex/config.toml` | `.codex/skills/<name>` |
 | pi (native MCP) | `.pi/mcp.json` | `.pi/skills/<name>` |
+| Antigravity | `.agents/mcp_config.json` | `.agents/skills/<name>` |
 
 Resource metadata lives in `library` next to the database: `library.yaml` stores resource metadata, MCP definitions, and absolute Skill directory paths. Legacy relative paths under `skills` remain supported and can be changed through the editor. `projects` holds deployment records for each project (legacy generated configs are retained for migration). The library uses YAML; agent configurations use their required TOML or JSON formats.
 

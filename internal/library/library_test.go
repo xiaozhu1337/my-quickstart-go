@@ -80,15 +80,18 @@ func configDoc(t *testing.T, path, agent string) map[string]any {
 	return doc
 }
 
-func TestDeployBothAgentsAndUpdate(t *testing.T) {
-	for _, agent := range []string{"codex", "pi"} {
+func TestDeployAgentsAndUpdate(t *testing.T) {
+	for _, agent := range []string{"codex", "pi", "antigravity"} {
 		t.Run(agent, func(t *testing.T) {
 			l, project, ids := fixture(t)
 			rel, key, skills := ".codex/config.toml", "mcp_servers", ".codex/skills"
 			original := "# user comment\nmodel = 'custom-model'\n[mcp_servers.personal]\ncommand = 'personal'\n[features]\nexample = true\n"
-			if agent == "pi" {
+			if agent != "codex" {
 				rel, key, skills = ".pi/mcp.json", "mcpServers", ".pi/skills"
 				original = `{"custom":true,"mcpServers":{"personal":{"command":"personal"}}}`
+			}
+			if agent == "antigravity" {
+				rel, skills = ".agents/mcp_config.json", ".agents/skills"
 			}
 			path := filepath.Join(project, rel)
 			write(t, path, original)
@@ -111,16 +114,20 @@ func TestDeployBothAgentsAndUpdate(t *testing.T) {
 				t.Fatal("existing server lost", doc)
 			}
 			headerKey := "http_headers"
-			if agent == "pi" {
+			if agent != "codex" {
 				headerKey = "headers"
 			}
-			if servers["remote-tools"].(map[string]any)[headerKey].(map[string]any)["X-Test"] != "value" {
+			remote := servers["remote-tools"].(map[string]any)
+			if agent == "antigravity" && (remote["serverUrl"] != "https://example.com/mcp" || remote["url"] != nil) {
+				t.Fatalf("unexpected Antigravity endpoint: %v", remote)
+			}
+			if remote[headerKey].(map[string]any)["X-Test"] != "value" {
 				t.Fatal("HTTP headers were not converted")
 			}
 			if agent == "codex" && doc["model"] != "custom-model" {
 				t.Fatal("unrelated config lost")
 			}
-			if agent == "pi" && doc["custom"] != true {
+			if agent != "codex" && doc["custom"] != true {
 				t.Fatal("unrelated config lost")
 			}
 			skillLink := filepath.Join(project, skills, "sample-skill")
