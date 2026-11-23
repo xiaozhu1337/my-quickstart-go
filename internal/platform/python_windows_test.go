@@ -4,6 +4,7 @@ package platform
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"my-quickstart-go/internal/model"
 )
@@ -29,9 +31,7 @@ func pythonTestDir(t *testing.T) string {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := os.Remove(dir); err != nil {
-			t.Error(err)
-		}
+		removePythonTestPath(t, dir)
 	})
 	return dir
 }
@@ -39,10 +39,27 @@ func pythonTestDir(t *testing.T) string {
 func removePythonTestFile(t *testing.T, path string) {
 	t.Helper()
 	t.Cleanup(func() {
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			t.Error(err)
-		}
+		removePythonTestPath(t, path)
 	})
+}
+
+func removePythonTestPath(t *testing.T, path string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		err := os.Remove(path)
+		if err == nil || os.IsNotExist(err) {
+			return
+		}
+		retryable := errors.Is(err, syscall.Errno(5)) || // ERROR_ACCESS_DENIED
+			errors.Is(err, syscall.Errno(32)) || // ERROR_SHARING_VIOLATION
+			errors.Is(err, syscall.Errno(145)) // ERROR_DIR_NOT_EMPTY
+		if !retryable || time.Now().After(deadline) {
+			t.Error(err)
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func TestScheduledPythonHasNoConsole(t *testing.T) {

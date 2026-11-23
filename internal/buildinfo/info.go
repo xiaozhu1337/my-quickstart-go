@@ -2,7 +2,7 @@ package buildinfo
 
 import "runtime/debug"
 
-const Version = "1.0.1"
+const Version = "1.0.2"
 
 type Dependency struct {
 	Path    string
