@@ -120,6 +120,8 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 		configRel, skillRel = ".pi/mcp.json", ".pi/skills"
 	case "antigravity":
 		configRel, skillRel = ".agents/mcp_config.json", ".agents/skills"
+	case "zcode":
+		configRel, skillRel = ".zcode/config.json", ".zcode/skills"
 	default:
 		return result, fmt.Errorf("不支持的项目 Agent: %s", agent)
 	}
@@ -324,6 +326,19 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 	return result, nil
 }
 
+func configObject(parent map[string]any, key string) (map[string]any, error) {
+	if value, exists := parent[key]; exists {
+		object, ok := value.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("现有 MCP 配置字段 %s 须为对象", key)
+		}
+		return object, nil
+	}
+	object := map[string]any{}
+	parent[key] = object
+	return object, nil
+}
+
 func mergeConfig(data []byte, agent string, items []Item, manifest *Deployment) ([]byte, error) {
 	doc := map[string]any{}
 	var err error
@@ -341,16 +356,19 @@ func mergeConfig(data []byte, agent string, items []Item, manifest *Deployment) 
 		return nil, errors.New("现有项目配置须为对象")
 	}
 	key := "mcpServers"
+	parent := doc
 	if agent == "codex" {
 		key = "mcp_servers"
-	}
-	servers := map[string]any{}
-	if existing, ok := doc[key]; ok {
-		var valid bool
-		servers, valid = existing.(map[string]any)
-		if !valid {
-			return nil, errors.New("现有 MCP 配置须为对象")
+	} else if agent == "zcode" {
+		key = "servers"
+		parent, err = configObject(doc, "mcp")
+		if err != nil {
+			return nil, err
 		}
+	}
+	servers, err := configObject(parent, key)
+	if err != nil {
+		return nil, err
 	}
 	for _, i := range items {
 		if i.Kind != "mcp" {
@@ -375,6 +393,9 @@ func mergeConfig(data []byte, agent string, items []Item, manifest *Deployment) 
 				urlKey = "serverUrl"
 			}
 			entry[urlKey] = s.URL
+			if agent == "zcode" {
+				entry["type"] = "http"
+			}
 			if len(s.Headers) > 0 {
 				h := "headers"
 				if agent == "codex" {
@@ -401,7 +422,6 @@ func mergeConfig(data []byte, agent string, items []Item, manifest *Deployment) 
 		servers[i.Name] = entry
 		manifest.Managed[i.Name] = i.ID
 	}
-	doc[key] = servers
 	if agent == "codex" {
 		return toml.Marshal(doc)
 	}

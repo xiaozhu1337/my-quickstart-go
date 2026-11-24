@@ -48,7 +48,7 @@ Windows 的 **启动程序时** 可选“隐藏窗口”“显示窗口”或“
 
 1. 点击“添加 MCP”，填写名称、说明和单个服务的 YAML 配置。支持 `command`、`args`、`env`、`cwd`，或 HTTP 的 `url`、`headers`；可再次编辑配置。
 2. 点击“添加 Skill”，选择含 `SKILL.md` 的目录。文件须包含 `name` 和 `description` frontmatter；直接将该目录记录为 Skill 所在目录，不复制文件。复制到项目时才读取当前目录内容；复制时拒绝目录内的软链接，单项上限为 100 MiB、10000 个路径。
-3. 左键点击所需 MCP / Skill 条目，选择目标 Agent（`codex`、`pi` 或 `antigravity`）和项目目录，再点击“复制到项目”。项目目录和添加、编辑 Skill 的目录均支持 `~` 表示当前用户主目录，例如 `~\code\kernel-debug` 或 `~/code/kernel-debug`。
+3. 左键点击所需 MCP / Skill 条目，选择目标 Agent（`codex`、`pi`、`antigravity` 或 `zcode`）和项目目录，再点击“复制到项目”。项目目录和添加、编辑 Skill 的目录均支持 `~` 表示当前用户主目录，例如 `~\code\kernel-debug` 或 `~/code/kernel-debug`。
 
 MCP 保存后可随时编辑名称；再次复制到项目时，会替换这个资源先前使用的名称，保留其他服务。同类型资源仍不能重名。
 
@@ -69,6 +69,7 @@ MCP 和 Skill 条目均提供“编辑”按钮。编辑 Skill 时，输入框�
 | Codex | `.codex/config.toml` | `.codex/skills/<name>` |
 | pi（原生 MCP） | `.pi/mcp.json` | `.pi/skills/<name>` |
 | Antigravity | `.agents/mcp_config.json` | `.agents/skills/<name>` |
+| ZCode | `.zcode/config.json` | `.zcode/skills/<name>` |
 
 资源元数据保存在数据库同级的 `library` 目录：`library.yaml` 保存资源信息、MCP 配置和 Skill 目录的绝对路径；旧版 `skills` 中的相对路径记录继续兼容，可通过编辑重新指定来源。`projects` 保存每个项目的部署记录（旧版生成配置保留以兼容迁移）。库配置采用 YAML；写入 agent 时转换为其要求的 TOML / JSON。
 

@@ -164,6 +164,35 @@ func TestDeployAgentsAndUpdate(t *testing.T) {
 	}
 }
 
+func TestDeployZCode(t *testing.T) {
+	l, project, ids := fixture(t)
+	path := filepath.Join(project, ".zcode", "config.json")
+	original := `{"custom":true,"mcp":{"enabled":true,"servers":{"personal":{"command":"personal"}}}}`
+	write(t, path, original)
+	result, err := l.Deploy(project, "zcode", ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.MCP != 2 || result.Skills != 1 || read(t, result.Backup) != original {
+		t.Fatalf("unexpected deployment: %+v", result)
+	}
+	doc := configDoc(t, path, "zcode")
+	mcp := doc["mcp"].(map[string]any)
+	servers := mcp["servers"].(map[string]any)
+	if doc["custom"] != true || mcp["enabled"] != true || servers["personal"].(map[string]any)["command"] != "personal" {
+		t.Fatal("existing ZCode settings lost", doc)
+	}
+	local := servers["local-tools"].(map[string]any)
+	remote := servers["remote-tools"].(map[string]any)
+	if local["command"] != "tool" || local["env"].(map[string]any)["TEST"] != "value" ||
+		remote["type"] != "http" || remote["url"] != "https://example.com/mcp" || remote["headers"].(map[string]any)["X-Test"] != "value" {
+		t.Fatal("unexpected ZCode servers", servers)
+	}
+	if read(t, filepath.Join(project, ".zcode", "skills", "sample-skill", "references", "guide.md")) != "Useful reference" {
+		t.Fatal("skill assets lost")
+	}
+}
+
 func TestCodexSkillUsesCodexDirectory(t *testing.T) {
 	l, project, ids := fixture(t)
 	if _, err := l.Deploy(project, "codex", ids[2:]); err != nil {
