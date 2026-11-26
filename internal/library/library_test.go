@@ -81,7 +81,7 @@ func configDoc(t *testing.T, path, agent string) map[string]any {
 }
 
 func TestDeployAgentsAndUpdate(t *testing.T) {
-	for _, agent := range []string{"codex", "pi", "antigravity"} {
+	for _, agent := range []string{"codex", "pi", "antigravity", "dimagent"} {
 		t.Run(agent, func(t *testing.T) {
 			l, project, ids := fixture(t)
 			rel, key, skills := ".codex/config.toml", "mcp_servers", ".codex/skills"
@@ -92,6 +92,9 @@ func TestDeployAgentsAndUpdate(t *testing.T) {
 			}
 			if agent == "antigravity" {
 				rel, skills = ".agents/mcp_config.json", ".agents/skills"
+			}
+			if agent == "dimagent" {
+				rel, skills = ".mcp.json", ".agents/skills"
 			}
 			path := filepath.Join(project, rel)
 			write(t, path, original)
@@ -118,6 +121,9 @@ func TestDeployAgentsAndUpdate(t *testing.T) {
 				headerKey = "headers"
 			}
 			remote := servers["remote-tools"].(map[string]any)
+			if agent == "dimagent" && (remote["type"] != "http" || remote["url"] != "https://example.com/mcp") {
+				t.Fatalf("unexpected Dim HTTP configuration: %v", remote)
+			}
 			if agent == "antigravity" && (remote["serverUrl"] != "https://example.com/mcp" || remote["url"] != nil) {
 				t.Fatalf("unexpected Antigravity endpoint: %v", remote)
 			}

@@ -122,6 +122,8 @@ func (l *Library) Deploy(project, agent string, ids []string) (Result, error) {
 		configRel, skillRel = ".agents/mcp_config.json", ".agents/skills"
 	case "zcode":
 		configRel, skillRel = ".zcode/config.json", ".zcode/skills"
+	case "dimagent":
+		configRel, skillRel = ".mcp.json", ".agents/skills"
 	default:
 		return result, fmt.Errorf("不支持的项目 Agent: %s", agent)
 	}
@@ -393,7 +395,7 @@ func mergeConfig(data []byte, agent string, items []Item, manifest *Deployment) 
 				urlKey = "serverUrl"
 			}
 			entry[urlKey] = s.URL
-			if agent == "zcode" {
+			if agent == "zcode" || agent == "dimagent" {
 				entry["type"] = "http"
 			}
 			if len(s.Headers) > 0 {
